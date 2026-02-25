@@ -1,0 +1,29 @@
+<form id="loginForm">
+    <input type="text" name="email" id="email" required>
+    <input type="password" name="password" id="password" required>
+    <button type="submit">Đăng nhập</button>
+</form>
+
+<script>
+    document.getElementById("loginForm").addEventListener("submit", async function (e) {
+        e.preventDefault();
+        const email = document.getElementById("email").value;
+        const password = document.getElementById("password").value;
+
+        const res = await fetch("/api/auth/login", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ email, password })
+        });
+
+        if (res.ok) {
+            const data = await res.json();
+            localStorage.setItem("token", data.token); // hoặc lưu vào cookie
+            window.location.href = "/"; // điều hướng về trang chính
+        } else {
+            alert("Sai tài khoản hoặc mật khẩu");
+        }
+    });
+</script>
