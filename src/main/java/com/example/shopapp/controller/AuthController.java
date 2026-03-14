@@ -1,6 +1,7 @@
 package com.example.shopapp.controller;
 
 import com.example.shopapp.dto.auth.*;
+import com.example.shopapp.exception.BadRequestException;
 import com.example.shopapp.service.AuthService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -40,5 +41,36 @@ public class AuthController {
     public ResponseEntity<String> resetPassword(@RequestBody ResetPasswordRequest request) {
         authService.resetPassword(request);
         return ResponseEntity.ok("✅ Password has been reset");
+    }
+
+    @GetMapping("/profile")
+    public ResponseEntity<UserProfileResponse> getProfile(@RequestHeader("Authorization") String authHeader) {
+        String token = extractBearerToken(authHeader);
+        return ResponseEntity.ok(authService.getUserProfile(token));
+    }
+
+    @PutMapping("/profile")
+    public ResponseEntity<UserProfileResponse> updateProfile(
+            @RequestHeader("Authorization") String authHeader,
+            @RequestBody UpdateProfileRequest request) {
+        String token = extractBearerToken(authHeader);
+        return ResponseEntity.ok(authService.updateUserProfile(token, request));
+    }
+
+    private String extractBearerToken(String authHeader) {
+        if (authHeader == null || authHeader.isBlank()) {
+            throw new BadRequestException("Thiếu Authorization header");
+        }
+
+        if (!authHeader.startsWith("Bearer ")) {
+            throw new BadRequestException("Authorization header phải có dạng Bearer <token>");
+        }
+
+        String token = authHeader.substring(7).trim();
+        if (token.isEmpty()) {
+            throw new BadRequestException("Token không được để trống");
+        }
+
+        return token;
     }
 }

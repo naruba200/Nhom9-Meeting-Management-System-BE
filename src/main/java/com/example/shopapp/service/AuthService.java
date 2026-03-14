@@ -152,4 +152,54 @@ public class AuthService {
 
         return "Đặt lại mật khẩu thành công.";
     }
+
+    // Lấy thông tin người dùng từ token
+    public UserProfileResponse getUserProfile(String token) {
+        if (!jwtUtil.validateToken(token)) {
+            throw new RuntimeException("Token không hợp lệ");
+        }
+
+        String email = jwtUtil.getEmailFromToken(token);
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng"));
+
+        return UserProfileResponse.builder()
+                .id(user.getId())
+                .email(user.getEmail())
+                .fullName(user.getFullName())
+                .phone(user.getPhone())
+                .role(user.getRole())
+                .enabled(user.isEnabled())
+                .build();
+    }
+
+    // Cập nhật thông tin người dùng
+    @Transactional
+    public UserProfileResponse updateUserProfile(String token, UpdateProfileRequest request) {
+        if (!jwtUtil.validateToken(token)) {
+            throw new RuntimeException("Token không hợp lệ");
+        }
+
+        String email = jwtUtil.getEmailFromToken(token);
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng"));
+
+        if (request.getFullName() != null && !request.getFullName().isEmpty()) {
+            user.setFullName(request.getFullName());
+        }
+        if (request.getPhone() != null) {
+            user.setPhone(request.getPhone());
+        }
+
+        userRepository.save(user);
+
+        return UserProfileResponse.builder()
+                .id(user.getId())
+                .email(user.getEmail())
+                .fullName(user.getFullName())
+                .phone(user.getPhone())
+                .role(user.getRole())
+                .enabled(user.isEnabled())
+                .build();
+    }
 }
