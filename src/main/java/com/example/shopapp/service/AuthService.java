@@ -22,6 +22,7 @@ public class AuthService {
     private final PasswordResetTokenRepository passwordResetTokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
+    private final GoogleOAuthService googleOAuthService;
 
     // Đăng ký
     public String register(RegisterRequest request) {
@@ -200,6 +201,40 @@ public class AuthService {
                 .phone(user.getPhone())
                 .role(user.getRole())
                 .enabled(user.isEnabled())
+                .build();
+    }
+
+    public GoogleLinkUrlResponse getGoogleLinkUrl(String token) {
+        if (!jwtUtil.validateToken(token)) {
+            throw new RuntimeException("Token không hợp lệ");
+        }
+
+        String email = jwtUtil.getEmailFromToken(token);
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng"));
+
+        String authorizationUrl = googleOAuthService.generateAuthorizationUrl(user);
+        return new GoogleLinkUrlResponse(authorizationUrl);
+    }
+
+    @Transactional
+    public void handleGoogleCallback(String state, String code, String error) {
+        googleOAuthService.handleOAuthCallback(state, code, error);
+    }
+
+    public GoogleLinkStatusResponse getGoogleLinkStatus(String token) {
+        if (!jwtUtil.validateToken(token)) {
+            throw new RuntimeException("Token không hợp lệ");
+        }
+
+        String email = jwtUtil.getEmailFromToken(token);
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng"));
+
+        return GoogleLinkStatusResponse.builder()
+                .linked(user.isGoogleCalendarLinked())
+                .googleAccountEmail(user.getGoogleAccountEmail())
+                .tokenExpiryAt(user.getGoogleTokenExpiryAt())
                 .build();
     }
 }

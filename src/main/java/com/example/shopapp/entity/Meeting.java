@@ -25,9 +25,6 @@ public class Meeting {
     @Column(columnDefinition = "TEXT")
     private String agenda;
 
-    @Column(nullable = false, length = 100)
-    private String room;
-
     @Column(nullable = false)
     private LocalDateTime startTime;
 
@@ -36,6 +33,15 @@ public class Meeting {
 
     @Column(nullable = false, length = 150)
     private String organizerEmail;
+
+    @Column(length = 500)
+    private String meetingLink;
+
+    @Column(length = 200)
+    private String googleCalendarEventId;
+
+    @Column(nullable = false)
+    private boolean syncedWithGoogleCalendar;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)

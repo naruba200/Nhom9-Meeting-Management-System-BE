@@ -3,7 +3,9 @@ package com.example.shopapp.controller;
 import com.example.shopapp.dto.auth.*;
 import com.example.shopapp.exception.BadRequestException;
 import com.example.shopapp.service.AuthService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -15,7 +17,7 @@ public class AuthController {
     private final AuthService authService;
 
     @PostMapping("/register")
-    public ResponseEntity<String> register(@RequestBody RegisterRequest request) {
+    public ResponseEntity<String> register(@Valid @RequestBody RegisterRequest request) {
         authService.register(request);
         return ResponseEntity.ok("✅ OTP sent to email");
     }
@@ -27,7 +29,7 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<AuthResponse> login(@RequestBody LoginRequest request) {
+    public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
         return ResponseEntity.ok(authService.login(request));
     }
 
@@ -55,6 +57,53 @@ public class AuthController {
             @RequestBody UpdateProfileRequest request) {
         String token = extractBearerToken(authHeader);
         return ResponseEntity.ok(authService.updateUserProfile(token, request));
+    }
+
+    @GetMapping("/google/link-url")
+    public ResponseEntity<GoogleLinkUrlResponse> getGoogleLinkUrl(
+            @RequestHeader("Authorization") String authHeader) {
+        String token = extractBearerToken(authHeader);
+        return ResponseEntity.ok(authService.getGoogleLinkUrl(token));
+    }
+
+    @GetMapping("/google/status")
+    public ResponseEntity<GoogleLinkStatusResponse> getGoogleLinkStatus(
+            @RequestHeader("Authorization") String authHeader) {
+        String token = extractBearerToken(authHeader);
+        return ResponseEntity.ok(authService.getGoogleLinkStatus(token));
+    }
+
+    @GetMapping("/google/callback")
+    public ResponseEntity<String> handleGoogleCallback(
+            @RequestParam(required = false) String state,
+            @RequestParam(required = false) String code,
+            @RequestParam(required = false) String error) {
+        try {
+            authService.handleGoogleCallback(state, code, error);
+            String successHtml = """
+                    <html><body><script>
+                    if (window.opener) {
+                      window.opener.postMessage({ type: 'google-link-result', success: true }, '*');
+                      window.close();
+                    }
+                    </script><h3>Liên kết Google thành công. Bạn có thể đóng cửa sổ này.</h3></body></html>
+                    """;
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.CONTENT_TYPE, "text/html; charset=UTF-8")
+                    .body(successHtml);
+        } catch (Exception ex) {
+            String escapedMessage = ex.getMessage() == null ? "Liên kết Google thất bại" : ex.getMessage().replace("'", "");
+            String errorHtml = """
+                    <html><body><script>
+                    if (window.opener) {
+                      window.opener.postMessage({ type: 'google-link-result', success: false, message: '%s' }, '*');
+                    }
+                    </script><h3>Liên kết Google thất bại: %s</h3></body></html>
+                    """.formatted(escapedMessage, escapedMessage);
+            return ResponseEntity.badRequest()
+                    .header(HttpHeaders.CONTENT_TYPE, "text/html; charset=UTF-8")
+                    .body(errorHtml);
+        }
     }
 
     private String extractBearerToken(String authHeader) {

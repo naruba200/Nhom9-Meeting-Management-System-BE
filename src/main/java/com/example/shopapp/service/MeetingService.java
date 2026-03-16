@@ -12,26 +12,43 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
 public class MeetingService {
 
     private final MeetingRepository meetingRepository;
+    private final GoogleCalendarService googleCalendarService;
 
     @Transactional
     public MeetingResponse createMeeting(CreateMeetingRequest request, User organizer) {
         validateMeetingTime(request.getStartTime(), request.getEndTime());
 
         LocalDateTime now = LocalDateTime.now();
+        boolean syncWithGoogleCalendar = Boolean.TRUE.equals(request.getSyncWithGoogleCalendar());
+
+        String meetingLink = request.getExternalMeetingLink();
+        String googleCalendarEventId = null;
+
+        if (syncWithGoogleCalendar) {
+            GoogleCalendarService.GoogleCalendarSyncResult syncResult = googleCalendarService
+                .createEventWithMeetLink(request, organizer);
+            googleCalendarEventId = syncResult.eventId();
+            if (syncResult.meetLink() != null && !syncResult.meetLink().isBlank()) {
+            meetingLink = syncResult.meetLink();
+            }
+        }
 
         Meeting meeting = Meeting.builder()
                 .title(request.getTitle().trim())
                 .agenda(request.getAgenda())
-                .room(request.getRoom().trim())
                 .startTime(request.getStartTime())
                 .endTime(request.getEndTime())
                 .organizerEmail(organizer.getEmail())
+            .meetingLink(meetingLink)
+            .googleCalendarEventId(googleCalendarEventId)
+            .syncedWithGoogleCalendar(syncWithGoogleCalendar)
                 .status(MeetingStatus.SCHEDULED)
                 .createdAt(now)
                 .updatedAt(now)
@@ -39,6 +56,13 @@ public class MeetingService {
 
         Meeting savedMeeting = meetingRepository.save(meeting);
         return toResponse(savedMeeting);
+    }
+
+    public List<MeetingResponse> getMeetingsByOrganizer(User organizer) {
+        return meetingRepository.findAllByOrganizerEmailOrderByStartTimeDesc(organizer.getEmail())
+                .stream()
+                .map(this::toResponse)
+                .toList();
     }
 
     private void validateMeetingTime(LocalDateTime startTime, LocalDateTime endTime) {
@@ -52,10 +76,12 @@ public class MeetingService {
                 .id(meeting.getId())
                 .title(meeting.getTitle())
                 .agenda(meeting.getAgenda())
-                .room(meeting.getRoom())
                 .startTime(meeting.getStartTime())
                 .endTime(meeting.getEndTime())
                 .organizerEmail(meeting.getOrganizerEmail())
+            .meetingLink(meeting.getMeetingLink())
+            .googleCalendarEventId(meeting.getGoogleCalendarEventId())
+            .syncedWithGoogleCalendar(meeting.isSyncedWithGoogleCalendar())
                 .status(meeting.getStatus())
                 .createdAt(meeting.getCreatedAt())
                 .updatedAt(meeting.getUpdatedAt())

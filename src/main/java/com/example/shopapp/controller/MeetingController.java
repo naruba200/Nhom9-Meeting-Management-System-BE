@@ -9,10 +9,13 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/meetings")
@@ -20,6 +23,13 @@ import org.springframework.web.bind.annotation.RestController;
 public class MeetingController {
 
     private final MeetingService meetingService;
+
+    @GetMapping
+    public ResponseEntity<List<MeetingResponse>> getMeetings(Authentication authentication) {
+        User organizer = (User) authentication.getPrincipal();
+        List<MeetingResponse> response = meetingService.getMeetingsByOrganizer(organizer);
+        return ResponseEntity.ok(response);
+    }
 
     @PostMapping
     public ResponseEntity<MeetingResponse> createMeeting(
