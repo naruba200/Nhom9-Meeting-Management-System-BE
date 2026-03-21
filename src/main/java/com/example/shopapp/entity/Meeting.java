@@ -34,6 +34,9 @@ public class Meeting {
     @Column(nullable = false, length = 150)
     private String organizerEmail;
 
+    @Column(nullable = false, length = 255)
+    private String room;
+
     @Column(length = 500)
     private String meetingLink;
 

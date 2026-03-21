@@ -111,7 +111,12 @@ public class GoogleOAuthService {
         }
 
         LocalDateTime expiryAt = user.getGoogleTokenExpiryAt();
-        if (expiryAt == null || expiryAt.isAfter(LocalDateTime.now().plusMinutes(1))) {
+        if (expiryAt == null) {
+            // Backward compatibility: if expiry is missing, try current access token first.
+            return user.getGoogleAccessToken();
+        }
+
+        if (expiryAt != null && expiryAt.isAfter(LocalDateTime.now().plusMinutes(1))) {
             return user.getGoogleAccessToken();
         }
 

@@ -1,6 +1,8 @@
 package com.example.shopapp.service;
 
 import com.example.shopapp.dto.meeting.CreateMeetingRequest;
+import com.example.shopapp.dto.meeting.UpdateMeetingRequest;
+import com.example.shopapp.entity.Meeting;
 import com.example.shopapp.entity.User;
 import com.example.shopapp.exception.BadRequestException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -68,6 +70,86 @@ public class GoogleCalendarService {
         }
     }
 
+    public void updateEvent(Meeting meeting, UpdateMeetingRequest request, User organizer) {
+        if (meeting.getGoogleCalendarEventId() == null || meeting.getGoogleCalendarEventId().isBlank()) {
+            throw new BadRequestException("Cuộc họp chưa được đồng bộ với Google Calendar");
+        }
+
+        String accessToken = googleOAuthService.getValidAccessToken(organizer);
+        ZoneId zoneId = resolveZoneId(request.getTimezone());
+        String start = request.getStartTime().atZone(zoneId).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
+        String end = request.getEndTime().atZone(zoneId).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
+
+        try {
+            String payload = buildUpdateEventPayload(request, start, end, zoneId);
+            String updateUrl = "https://www.googleapis.com/calendar/v3/calendars/primary/events/"
+                    + meeting.getGoogleCalendarEventId();
+
+            HttpRequest httpRequest = HttpRequest.newBuilder()
+                    .uri(URI.create(updateUrl))
+                    .header("Authorization", "Bearer " + accessToken)
+                    .header("Content-Type", "application/json")
+                    .PUT(HttpRequest.BodyPublishers.ofString(payload))
+                    .build();
+
+            HttpResponse<String> response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() >= 300) {
+                throw new BadRequestException(parseGoogleError(response.statusCode(), response.body()));
+            }
+        } catch (IOException e) {
+            throw new BadRequestException("Không đọc được phản hồi từ Google Calendar");
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new BadRequestException("Yêu cầu cập nhật Google Calendar bị gián đoạn");
+        }
+    }
+
+    public void deleteEvent(Meeting meeting, User organizer) {
+        if (meeting.getGoogleCalendarEventId() == null || meeting.getGoogleCalendarEventId().isBlank()) {
+            return;
+        }
+
+        String accessToken = googleOAuthService.getValidAccessToken(organizer);
+        String deleteUrl = "https://www.googleapis.com/calendar/v3/calendars/primary/events/"
+                + meeting.getGoogleCalendarEventId();
+
+        try {
+            HttpRequest httpRequest = HttpRequest.newBuilder()
+                    .uri(URI.create(deleteUrl))
+                    .header("Authorization", "Bearer " + accessToken)
+                    .DELETE()
+                    .build();
+
+            HttpResponse<String> response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
+
+            // 204: deleted, 404: already removed / not found -> both treated as effectively cancelled.
+            if (response.statusCode() != 204 && response.statusCode() != 404) {
+                throw new BadRequestException(parseGoogleError(response.statusCode(), response.body()));
+            }
+        } catch (IOException e) {
+            throw new BadRequestException("Không đọc được phản hồi từ Google Calendar");
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new BadRequestException("Yêu cầu hủy sự kiện Google Calendar bị gián đoạn");
+        }
+    }
+
+    private String buildUpdateEventPayload(UpdateMeetingRequest request, String start, String end, ZoneId zoneId) {
+        ObjectNode payload = objectMapper.createObjectNode();
+        payload.put("summary", request.getTitle());
+        payload.put("description", request.getAgenda() == null ? "" : request.getAgenda());
+
+        ObjectNode startNode = payload.putObject("start");
+        startNode.put("dateTime", start);
+        startNode.put("timeZone", zoneId.getId());
+
+        ObjectNode endNode = payload.putObject("end");
+        endNode.put("dateTime", end);
+        endNode.put("timeZone", zoneId.getId());
+
+        return payload.toString();
+    }
+
     private String buildEventPayload(CreateMeetingRequest request, String organizerEmail, String start, String end, ZoneId zoneId) {
         ObjectNode payload = objectMapper.createObjectNode();
         payload.put("summary", request.getTitle());
@@ -114,17 +196,30 @@ public class GoogleCalendarService {
     }
 
     private String parseGoogleError(int status, String body) {
-        if (status == 401 || status == 403) {
-            return "googleAccessToken không hợp lệ hoặc đã hết hạn";
-        }
+        String googleMessage = "";
+        String googleReason = "";
 
         try {
             JsonNode root = objectMapper.readTree(body);
-            String message = root.path("error").path("message").asText();
-            if (!message.isBlank()) {
-                return "Không thể đồng bộ Google Calendar: " + message;
+            googleMessage = root.path("error").path("message").asText("").trim();
+            JsonNode errors = root.path("error").path("errors");
+            if (errors.isArray() && !errors.isEmpty()) {
+                googleReason = errors.get(0).path("reason").asText("").trim();
             }
         } catch (Exception ignored) {
+        }
+
+        String normalized = (googleMessage + " " + googleReason).toLowerCase();
+        if (status == 401 || normalized.contains("invalid credentials") || normalized.contains("invalid_grant")) {
+            return "googleAccessToken không hợp lệ hoặc đã hết hạn";
+        }
+
+        if (status == 403 && (normalized.contains("insufficient") || normalized.contains("permission") || normalized.contains("forbidden"))) {
+            return "Google chưa cấp đủ quyền Calendar. Vui lòng liên kết lại Google và chấp thuận đầy đủ quyền truy cập.";
+        }
+
+        if (!googleMessage.isBlank()) {
+            return "Không thể đồng bộ Google Calendar: " + googleMessage;
         }
 
         return "Không thể đồng bộ Google Calendar (HTTP " + status + ")";

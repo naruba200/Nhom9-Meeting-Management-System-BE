@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Getter;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Getter
 @Builder
@@ -22,4 +23,7 @@ public class MeetingResponse {
     private MeetingStatus status;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private List<MeetingAttendeeResponse> attendees;
+    private List<MeetingAgendaItemResponse> agendaItems;
+    private Integer totalAgendaDurationMinutes;
 }

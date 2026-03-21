@@ -4,7 +4,6 @@ import jakarta.validation.constraints.Future;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
-import jakarta.validation.constraints.Email;
 import jakarta.validation.Valid;
 import lombok.Getter;
 import lombok.Setter;
@@ -14,7 +13,7 @@ import java.util.List;
 
 @Getter
 @Setter
-public class CreateMeetingRequest {
+public class UpdateMeetingRequest {
 
     @NotBlank(message = "Tiêu đề cuộc họp không được để trống")
     @Size(max = 255, message = "Tiêu đề cuộc họp tối đa 255 ký tự")
@@ -31,19 +30,13 @@ public class CreateMeetingRequest {
     @Future(message = "Thời gian kết thúc phải ở tương lai")
     private LocalDateTime endTime;
 
-    @NotNull(message = "syncWithGoogleCalendar là bắt buộc")
-    private Boolean syncWithGoogleCalendar;
-
     @Size(max = 500, message = "Link họp tối đa 500 ký tự")
     private String externalMeetingLink;
 
+    private Boolean syncWithGoogleCalendar;
+
     @Size(max = 100, message = "Múi giờ tối đa 100 ký tự")
     private String timezone;
-
-    @Size(max = 3000, message = "Google access token quá dài")
-    private String googleAccessToken;
-
-    private List<@Email(message = "Email người tham gia không hợp lệ") String> attendeeEmails;
 
     @Valid
     private List<AgendaItemRequest> agendaItems;

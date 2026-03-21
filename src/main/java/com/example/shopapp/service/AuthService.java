@@ -2,6 +2,7 @@ package com.example.shopapp.service;
 
 import com.example.shopapp.dto.auth.*;
 import com.example.shopapp.entity.*;
+import com.example.shopapp.exception.BadRequestException;
 import com.example.shopapp.repository.*;
 import com.example.shopapp.util.JwtUtil;
 import jakarta.transaction.Transactional;
@@ -56,10 +57,19 @@ public class AuthService {
                 .build();
         otpTokenRepository.save(otpToken);
 
-        // ✅ Gửi mail
-        String subject = "🔐 MÁY CỦA BẠN ĐÃ BỊ HACK";
-        String body = "Đã lấy hết dữ liệu,\n\nMã ASVM của bạn là: " + otp
-                + "\nASVM có hiệu lực trong 5 phút.\n\nThân mến.";
+        // Tạo link xác thực tự động
+        String verifyLink = "http://localhost:4200/verify-otp?email=" + email + "&otp=" + otp;
+
+        String subject = "Xác thực tài khoản - Hệ thống Quản lý Cuộc họp";
+        String body = "Xin chào,\n\n"
+                + "Cảm ơn bạn đã đăng ký tài khoản tại Hệ thống Quản lý Cuộc họp.\n\n"
+                + "Mã xác thực (OTP) của bạn là: " + otp + "\n\n"
+                + "Hoặc bạn có thể nhấn vào đường link dưới đây để xác thực tự động:\n"
+                + verifyLink + "\n\n"
+                + "Lưu ý: Mã OTP có hiệu lực trong 5 phút.\n\n"
+                + "Nếu bạn không yêu cầu đăng ký tài khoản, vui lòng bỏ qua email này.\n\n"
+                + "Trân trọng,\n"
+                + "Hệ thống Quản lý Cuộc họp";
         emailService.sendEmail(email, subject, body);
     }
 
@@ -102,9 +112,9 @@ public class AuthService {
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword()))
             throw new RuntimeException("Mật khẩu không chính xác");
 
-        String token = jwtUtil.generateToken(user.getEmail());
+        String token = jwtUtil.generateToken(user.getEmail(), user.getRole());
 
-        return new AuthResponse(token, user.getEmail(), user.getFullName());
+        return new AuthResponse(token, user.getEmail(), user.getFullName(), user.getRole());
     }
 
     // Gửi token quên mật khẩu
@@ -222,6 +232,7 @@ public class AuthService {
         googleOAuthService.handleOAuthCallback(state, code, error);
     }
 
+    @Transactional
     public GoogleLinkStatusResponse getGoogleLinkStatus(String token) {
         if (!jwtUtil.validateToken(token)) {
             throw new RuntimeException("Token không hợp lệ");
@@ -231,10 +242,26 @@ public class AuthService {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng"));
 
+        boolean linked = user.isGoogleCalendarLinked();
+        if (linked) {
+            try {
+                // Validate current token state. This may refresh access token if needed.
+                googleOAuthService.getValidAccessToken(user);
+            } catch (BadRequestException ex) {
+                // If token is no longer usable, force re-link so frontend won't keep sync enabled.
+                linked = false;
+                user.setGoogleCalendarLinked(false);
+                user.setGoogleAccessToken(null);
+                user.setGoogleRefreshToken(null);
+                user.setGoogleTokenExpiryAt(null);
+                userRepository.save(user);
+            }
+        }
+
         return GoogleLinkStatusResponse.builder()
-                .linked(user.isGoogleCalendarLinked())
-                .googleAccountEmail(user.getGoogleAccountEmail())
-                .tokenExpiryAt(user.getGoogleTokenExpiryAt())
+                .linked(linked)
+                .googleAccountEmail(linked ? user.getGoogleAccountEmail() : null)
+                .tokenExpiryAt(linked ? user.getGoogleTokenExpiryAt() : null)
                 .build();
     }
 }
