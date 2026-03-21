@@ -40,4 +40,5 @@ public class UpdateMeetingRequest {
 
     @Valid
     private List<AgendaItemRequest> agendaItems;
+
 }

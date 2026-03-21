@@ -1,21 +1,27 @@
 package com.example.shopapp.service;
 
 import com.example.shopapp.dto.meeting.AgendaItemRequest;
+import com.example.shopapp.dto.meeting.AttachmentUploadSignatureResponse;
+import com.example.shopapp.dto.meeting.AttachmentUploadSignatureRequest;
+import com.example.shopapp.dto.meeting.ConfirmMeetingAttachmentUploadRequest;
 import com.example.shopapp.dto.meeting.CreateMeetingRequest;
 import com.example.shopapp.dto.meeting.InviteMeetingRequest;
 import com.example.shopapp.dto.meeting.MeetingAgendaItemResponse;
+import com.example.shopapp.dto.meeting.MeetingAttachmentResponse;
 import com.example.shopapp.dto.meeting.MeetingAttendeeResponse;
 import com.example.shopapp.dto.meeting.MeetingResponse;
 import com.example.shopapp.dto.meeting.UpdateMeetingAgendaRequest;
 import com.example.shopapp.dto.meeting.UpdateMeetingRequest;
 import com.example.shopapp.entity.Meeting;
 import com.example.shopapp.entity.MeetingAgendaItem;
+import com.example.shopapp.entity.MeetingAttachment;
 import com.example.shopapp.entity.MeetingAttendee;
 import com.example.shopapp.entity.User;
 import com.example.shopapp.enums.InvitationStatus;
 import com.example.shopapp.enums.MeetingStatus;
 import com.example.shopapp.exception.BadRequestException;
 import com.example.shopapp.repository.MeetingAgendaItemRepository;
+import com.example.shopapp.repository.MeetingAttachmentRepository;
 import com.example.shopapp.repository.MeetingAttendeeRepository;
 import com.example.shopapp.repository.MeetingRepository;
 import com.example.shopapp.repository.UserRepository;
@@ -36,8 +42,10 @@ public class MeetingService {
 
     private final MeetingRepository meetingRepository;
     private final MeetingAgendaItemRepository meetingAgendaItemRepository;
+    private final MeetingAttachmentRepository meetingAttachmentRepository;
     private final MeetingAttendeeRepository meetingAttendeeRepository;
     private final UserRepository userRepository;
+    private final CloudinaryUploadService cloudinaryUploadService;
     private final GoogleCalendarService googleCalendarService;
     private final NotificationService notificationService;
     private final AsyncNotificationService asyncNotificationService;
@@ -100,7 +108,7 @@ public class MeetingService {
                 .build();
 
         Meeting savedMeeting = meetingRepository.save(meeting);
-    replaceAgendaItems(savedMeeting.getId(), request.getAgendaItems());
+        replaceAgendaItems(savedMeeting.getId(), request.getAgendaItems());
         // Xử lý mời người dùng trong background để response ngay lập tức
         asyncNotificationService.processInvitationAsync(savedMeeting.getId(), normalizedAttendeeEmails, organizer.getEmail());
         return toResponse(savedMeeting);
@@ -201,6 +209,78 @@ public class MeetingService {
         // Xử lý thông báo trong background để response ngay lập tức
         asyncNotificationService.processMeetingUpdatedAsync(savedMeeting.getId(), organizer.getEmail());
         return toResponse(savedMeeting);
+    }
+
+        public AttachmentUploadSignatureResponse createAttachmentUploadSignature(
+            Long meetingId,
+            AttachmentUploadSignatureRequest request,
+            User organizer
+        ) {
+        Meeting meeting = getOrganizerOwnedMeeting(meetingId, organizer);
+        ensureMeetingCanBeEdited(meeting);
+
+        CloudinaryUploadService.SignedUploadPayload payload = cloudinaryUploadService
+            .createSignedUploadPayload(meetingId, request.getFileName());
+
+        return AttachmentUploadSignatureResponse.builder()
+            .cloudName(payload.cloudName())
+            .apiKey(payload.apiKey())
+            .timestamp(payload.timestamp())
+            .signature(payload.signature())
+            .folder(payload.folder())
+            .publicId(payload.publicId())
+            .resourceType(payload.resourceType())
+            .build();
+        }
+
+        @Transactional
+        public MeetingAttachmentResponse confirmMeetingAttachmentUpload(
+            Long meetingId,
+            ConfirmMeetingAttachmentUploadRequest request,
+            User organizer
+        ) {
+        Meeting meeting = getOrganizerOwnedMeeting(meetingId, organizer);
+        ensureMeetingCanBeEdited(meeting);
+
+        cloudinaryUploadService.validateSecureUrl(request.getSecureUrl());
+
+        LocalDateTime now = LocalDateTime.now();
+        MeetingAttachment attachment = meetingAttachmentRepository
+            .findByMeetingIdAndCloudPublicId(meetingId, request.getCloudPublicId())
+            .orElseGet(() -> MeetingAttachment.builder()
+                .meetingId(meetingId)
+                .createdAt(now)
+                .build());
+
+        attachment.setFileName(request.getFileName().trim());
+        attachment.setFileType(request.getFileType() == null ? null : request.getFileType().trim());
+        attachment.setFileSizeBytes(request.getFileSizeBytes() == null ? 0L : request.getFileSizeBytes());
+        attachment.setCloudPublicId(request.getCloudPublicId().trim());
+        attachment.setCloudUploadUrl(request.getSecureUrl().trim());
+        attachment.setCloudUploadStatus("UPLOADED");
+        attachment.setUpdatedAt(now);
+
+        MeetingAttachment savedAttachment = meetingAttachmentRepository.save(attachment);
+
+        meeting.setUpdatedAt(now);
+        meetingRepository.save(meeting);
+
+        return toAttachmentResponse(savedAttachment);
+        }
+
+    @Transactional
+    public void deleteMeetingAttachment(Long meetingId, Long attachmentId, User organizer) {
+        Meeting meeting = getOrganizerOwnedMeeting(meetingId, organizer);
+        ensureMeetingCanBeEdited(meeting);
+
+        MeetingAttachment attachment = meetingAttachmentRepository
+                .findByIdAndMeetingId(attachmentId, meetingId)
+                .orElseThrow(() -> new BadRequestException("Không tìm thấy tài liệu đính kèm"));
+
+        meetingAttachmentRepository.delete(attachment);
+
+        meeting.setUpdatedAt(LocalDateTime.now());
+        meetingRepository.save(meeting);
     }
 
     @Transactional
@@ -352,6 +432,11 @@ public class MeetingService {
             .stream()
             .map(this::toAgendaItemResponse)
             .toList();
+        List<MeetingAttachmentResponse> attachments = meetingAttachmentRepository
+            .findAllByMeetingIdOrderByIdAsc(meeting.getId())
+            .stream()
+            .map(this::toAttachmentResponse)
+            .toList();
         int totalAgendaDurationMinutes = agendaItems.stream()
             .mapToInt(item -> item.getDurationMinutes() == null ? 0 : item.getDurationMinutes())
             .sum();
@@ -371,6 +456,7 @@ public class MeetingService {
                 .updatedAt(meeting.getUpdatedAt())
                 .attendees(attendees)
                 .agendaItems(agendaItems)
+                .attachments(attachments)
                 .totalAgendaDurationMinutes(totalAgendaDurationMinutes)
                 .build();
     }
@@ -405,6 +491,23 @@ public class MeetingService {
         meetingAgendaItemRepository.saveAll(agendaItems);
     }
 
+    private Meeting getOrganizerOwnedMeeting(Long meetingId, User organizer) {
+        Meeting meeting = meetingRepository.findById(meetingId)
+                .orElseThrow(() -> new BadRequestException("Không tìm thấy cuộc họp"));
+
+        if (!organizer.getEmail().equalsIgnoreCase(meeting.getOrganizerEmail())) {
+            throw new BadRequestException("Bạn không có quyền thao tác tài liệu của cuộc họp này");
+        }
+
+        return meeting;
+    }
+
+    private void ensureMeetingCanBeEdited(Meeting meeting) {
+        if (meeting.getStatus() == MeetingStatus.CANCELLED || meeting.getStatus() == MeetingStatus.COMPLETED) {
+            throw new BadRequestException("Không thể thao tác tài liệu của cuộc họp đã hủy hoặc đã hoàn thành");
+        }
+    }
+
     private MeetingAttendeeResponse toAttendeeResponse(MeetingAttendee attendee) {
         return MeetingAttendeeResponse.builder()
                 .id(attendee.getId())
@@ -423,6 +526,18 @@ public class MeetingService {
                 .durationMinutes(item.getDurationMinutes())
                 .description(item.getDescription())
                 .itemOrder(item.getItemOrder())
+                .build();
+    }
+
+    private MeetingAttachmentResponse toAttachmentResponse(MeetingAttachment attachment) {
+        return MeetingAttachmentResponse.builder()
+                .id(attachment.getId())
+                .fileName(attachment.getFileName())
+                .fileType(attachment.getFileType())
+                .fileSizeBytes(attachment.getFileSizeBytes())
+                .cloudUploadUrl(attachment.getCloudUploadUrl())
+                .cloudPublicId(attachment.getCloudPublicId())
+                .cloudUploadStatus(attachment.getCloudUploadStatus())
                 .build();
     }
 }

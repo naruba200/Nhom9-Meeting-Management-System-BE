@@ -1,7 +1,11 @@
 package com.example.shopapp.controller;
 
 import com.example.shopapp.dto.meeting.CreateMeetingRequest;
+import com.example.shopapp.dto.meeting.AttachmentUploadSignatureRequest;
+import com.example.shopapp.dto.meeting.AttachmentUploadSignatureResponse;
+import com.example.shopapp.dto.meeting.ConfirmMeetingAttachmentUploadRequest;
 import com.example.shopapp.dto.meeting.InviteMeetingRequest;
+import com.example.shopapp.dto.meeting.MeetingAttachmentResponse;
 import com.example.shopapp.dto.meeting.MeetingResponse;
 import com.example.shopapp.dto.meeting.UpdateMeetingAgendaRequest;
 import com.example.shopapp.dto.meeting.UpdateMeetingRequest;
@@ -86,6 +90,36 @@ public class MeetingController {
             Authentication authentication) {
         User organizer = (User) authentication.getPrincipal();
         meetingService.inviteAttendees(meetingId, request, organizer);
+    }
+
+    @PostMapping("/{meetingId}/attachments/signature")
+    public ResponseEntity<AttachmentUploadSignatureResponse> createAttachmentUploadSignature(
+            @PathVariable Long meetingId,
+            @Valid @RequestBody AttachmentUploadSignatureRequest request,
+            Authentication authentication) {
+        User organizer = (User) authentication.getPrincipal();
+        AttachmentUploadSignatureResponse response = meetingService.createAttachmentUploadSignature(meetingId, request, organizer);
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/{meetingId}/attachments/confirm")
+    public ResponseEntity<MeetingAttachmentResponse> confirmMeetingAttachmentUpload(
+            @PathVariable Long meetingId,
+            @Valid @RequestBody ConfirmMeetingAttachmentUploadRequest request,
+            Authentication authentication) {
+        User organizer = (User) authentication.getPrincipal();
+        MeetingAttachmentResponse response = meetingService.confirmMeetingAttachmentUpload(meetingId, request, organizer);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @DeleteMapping("/{meetingId}/attachments/{attachmentId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteMeetingAttachment(
+            @PathVariable Long meetingId,
+            @PathVariable Long attachmentId,
+            Authentication authentication) {
+        User organizer = (User) authentication.getPrincipal();
+        meetingService.deleteMeetingAttachment(meetingId, attachmentId, organizer);
     }
 
     @DeleteMapping("/{meetingId}/attendees")

@@ -47,4 +47,5 @@ public class CreateMeetingRequest {
 
     @Valid
     private List<AgendaItemRequest> agendaItems;
+
 }

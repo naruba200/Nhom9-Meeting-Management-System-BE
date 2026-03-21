@@ -25,5 +25,6 @@ public class MeetingResponse {
     private LocalDateTime updatedAt;
     private List<MeetingAttendeeResponse> attendees;
     private List<MeetingAgendaItemResponse> agendaItems;
+    private List<MeetingAttachmentResponse> attachments;
     private Integer totalAgendaDurationMinutes;
 }
