@@ -5,6 +5,7 @@ import com.example.shopapp.dto.meeting.AttachmentUploadSignatureResponse;
 import com.example.shopapp.dto.meeting.AttachmentUploadSignatureRequest;
 import com.example.shopapp.dto.meeting.ConfirmMeetingAttachmentUploadRequest;
 import com.example.shopapp.dto.meeting.CreateMeetingRequest;
+import org.springframework.scheduling.annotation.Scheduled;
 import com.example.shopapp.dto.meeting.InviteMeetingRequest;
 import com.example.shopapp.dto.meeting.MeetingAgendaItemResponse;
 import com.example.shopapp.dto.meeting.MeetingAttachmentResponse;
@@ -131,12 +132,19 @@ public class MeetingService {
                 : meetingRepository.findAllByIdInOrderByStartTimeDesc(acceptedMeetingIds);
 
         List<Meeting> mergedMeetings = mergeMeetings(organizerMeetings, attendeeMeetings);
-        markExpiredScheduledMeetingsAsCompleted(mergedMeetings);
+        applyTimeBasedStatusTransitions(mergedMeetings, LocalDateTime.now());
 
         return mergedMeetings.stream()
                 .sorted(Comparator.comparing(Meeting::getStartTime).reversed())
                 .map(this::toResponse)
                 .toList();
+    }
+
+    public MeetingResponse getMeetingById(Long meetingId) {
+        Meeting meeting = meetingRepository.findById(meetingId)
+                .orElseThrow(() -> new BadRequestException("Meeting not found"));
+        applyTimeBasedStatusTransitions(List.of(meeting), LocalDateTime.now());
+        return toResponse(meeting);
     }
 
     private void markExpiredScheduledMeetingsAsCompleted(List<Meeting> meetings) {
@@ -156,6 +164,40 @@ public class MeetingService {
         });
 
         meetingRepository.saveAll(expiredMeetings);
+    }
+
+    @Scheduled(cron = "0 * * * * *")
+    @Transactional
+    public void syncMeetingStatusesByTime() {
+        List<Meeting> meetings = meetingRepository.findAll();
+        applyTimeBasedStatusTransitions(meetings, LocalDateTime.now());
+    }
+
+    private void applyTimeBasedStatusTransitions(List<Meeting> meetings, LocalDateTime now) {
+        List<Meeting> changedMeetings = meetings.stream()
+                .filter(meeting -> meeting.getStatus() != MeetingStatus.CANCELLED && meeting.getStatus() != MeetingStatus.COMPLETED)
+                .filter(meeting -> {
+                    if (meeting.getEndTime() != null && !meeting.getEndTime().isAfter(now)) {
+                        meeting.setStatus(MeetingStatus.COMPLETED);
+                        meeting.setUpdatedAt(now);
+                        return true;
+                    }
+
+                    if (meeting.getStatus() == MeetingStatus.SCHEDULED
+                            && meeting.getStartTime() != null
+                            && !meeting.getStartTime().isAfter(now)) {
+                        meeting.setStatus(MeetingStatus.IN_PROGRESS);
+                        meeting.setUpdatedAt(now);
+                        return true;
+                    }
+
+                    return false;
+                })
+                .toList();
+
+        if (!changedMeetings.isEmpty()) {
+            meetingRepository.saveAll(changedMeetings);
+        }
     }
 
     private List<Meeting> mergeMeetings(List<Meeting> organizerMeetings, List<Meeting> attendeeMeetings) {

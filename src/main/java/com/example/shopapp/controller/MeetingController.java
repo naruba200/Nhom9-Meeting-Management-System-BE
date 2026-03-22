@@ -43,6 +43,15 @@ public class MeetingController {
         return ResponseEntity.ok(response);
     }
 
+    @GetMapping("/{meetingId}")
+    public ResponseEntity<MeetingResponse> getMeetingById(
+            @PathVariable Long meetingId,
+            Authentication authentication) {
+        User user = (User) authentication.getPrincipal();
+        MeetingResponse response = meetingService.getMeetingById(meetingId);
+        return ResponseEntity.ok(response);
+    }
+
     @PostMapping
     public ResponseEntity<MeetingResponse> createMeeting(
             @Valid @RequestBody CreateMeetingRequest request,

@@ -82,6 +82,21 @@ public class NotificationService {
     }
 
     @Transactional
+    public void createNotification(String recipientEmail, Long meetingId, NotificationType type, String title, String message) {
+        Notification notification = Notification.builder()
+                .recipientEmail(normalizeEmail(recipientEmail))
+                .title(title)
+                .message(message)
+                .type(type)
+                .isRead(false)
+                .meetingId(meetingId)
+                .createdAt(LocalDateTime.now())
+                .build();
+
+        notificationRepository.save(notification);
+    }
+
+    @Transactional
     public void createInvitationNotifications(Meeting meeting, List<String> attendeeEmails, String organizerEmail) {
         Set<String> recipients = normalizeRecipients(attendeeEmails);
         recipients.removeIf(email -> email.equalsIgnoreCase(organizerEmail));

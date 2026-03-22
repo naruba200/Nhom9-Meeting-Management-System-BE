@@ -1,42 +1,41 @@
 package com.example.shopapp.entity;
 
-import com.example.shopapp.enums.NotificationType;
+import com.example.shopapp.enums.TaskStatus;
 import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "notifications")
+@Table(name = "subtasks")
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Notification {
+public class Subtask {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, length = 150)
-    private String recipientEmail;
-
     @Column(nullable = false, length = 255)
     private String title;
 
-    @Column(nullable = false, length = 2000)
-    private String message;
-
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 50)
-    private NotificationType type;
+    @Column(nullable = false, length = 20)
+    private TaskStatus status;
 
-    @Column(nullable = false)
-    private boolean isRead;
-
-    private Long meetingId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "task_id", nullable = false)
+    private Task task;
 
     @Column(nullable = false)
     private LocalDateTime createdAt;
+
+    @Column(nullable = false)
+    private LocalDateTime updatedAt;
+
+    @Column
+    private LocalDateTime completedAt;
 }
