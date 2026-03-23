@@ -11,6 +11,7 @@ import com.example.shopapp.dto.meeting.MeetingAgendaItemResponse;
 import com.example.shopapp.dto.meeting.MeetingAttachmentResponse;
 import com.example.shopapp.dto.meeting.MeetingAttendeeResponse;
 import com.example.shopapp.dto.meeting.MeetingResponse;
+import com.example.shopapp.dto.meeting.PaginatedMeetingResponse;
 import com.example.shopapp.dto.meeting.UpdateMeetingAgendaRequest;
 import com.example.shopapp.dto.meeting.UpdateMeetingRequest;
 import com.example.shopapp.entity.Meeting;
@@ -29,6 +30,8 @@ import com.example.shopapp.repository.UserRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionSynchronizationAdapter;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -110,9 +113,86 @@ public class MeetingService {
 
         Meeting savedMeeting = meetingRepository.save(meeting);
         replaceAgendaItems(savedMeeting.getId(), request.getAgendaItems());
-        // Xử lý mời người dùng trong background để response ngay lập tức
-        asyncNotificationService.processInvitationAsync(savedMeeting.getId(), normalizedAttendeeEmails, organizer.getEmail());
+
+        // Logging for debugging
+        System.out.println("Created meeting " + savedMeeting.getId() + " with " + normalizedAttendeeEmails.size() + " attendees: " +
+            normalizedAttendeeEmails.stream().collect(java.util.stream.Collectors.joining(", ")));
+
+        // Xử lý mời người dùng: lưu attendees trước (đồng bộ)
+        if (!normalizedAttendeeEmails.isEmpty()) {
+            notificationService.saveAttendees(savedMeeting.getId(), normalizedAttendeeEmails);
+            
+            // Register callback để gửi notifications sau khi transaction commit
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronizationAdapter() {
+                @Override
+                public void afterCommit() {
+                    asyncNotificationService.processInvitationNotificationsAsync(
+                        savedMeeting.getId(), normalizedAttendeeEmails, organizer.getEmail());
+                }
+            });
+        }
+
         return toResponse(savedMeeting);
+    }
+
+    /**
+     * Gửi notifications và emails cho attendees (chạy bất đồng bộ sau khi tạo cuộc họp).
+     * Phương thức này nên được gọi SAU KHI transaction của createMeeting đã commit.
+     */
+    public void sendInvitationNotificationsAsync(Long meetingId, List<String> attendeeEmails, String organizerEmail) {
+        asyncNotificationService.processInvitationNotificationsAsync(meetingId, attendeeEmails, organizerEmail);
+    }
+
+    public PaginatedMeetingResponse getMeetingsForUserPaginated(User user, int page, int size, String sortOrder) {
+        String userEmail = user.getEmail();
+
+        List<Meeting> organizerMeetings = meetingRepository.findAllByOrganizerEmailOrderByStartTimeDesc(userEmail);
+
+        List<Long> acceptedMeetingIds = meetingAttendeeRepository
+                .findAllByEmailAndStatus(userEmail, InvitationStatus.ACCEPTED)
+                .stream()
+                .map(MeetingAttendee::getMeetingId)
+                .distinct()
+                .toList();
+
+        List<Meeting> attendeeMeetings = acceptedMeetingIds.isEmpty()
+                ? List.of()
+                : meetingRepository.findAllByIdInOrderByStartTimeDesc(acceptedMeetingIds);
+
+        List<Meeting> mergedMeetings = mergeMeetings(organizerMeetings, attendeeMeetings);
+        applyTimeBasedStatusTransitions(mergedMeetings, LocalDateTime.now());
+
+        // Sort
+        if ("oldest".equalsIgnoreCase(sortOrder)) {
+            mergedMeetings.sort(Comparator.comparing(Meeting::getStartTime));
+        } else {
+            mergedMeetings.sort(Comparator.comparing(Meeting::getStartTime).reversed());
+        }
+
+        // Pagination
+        long totalElements = mergedMeetings.size();
+        int totalPages = (int) Math.ceil((double) totalElements / size);
+        int fromIndex = page * size;
+        int toIndex = Math.min(fromIndex + size, (int) totalElements);
+
+        List<Meeting> paginatedMeetings = fromIndex >= totalElements
+                ? List.of()
+                : mergedMeetings.subList(fromIndex, toIndex);
+
+        List<MeetingResponse> content = paginatedMeetings.stream()
+                .map(this::toResponse)
+                .toList();
+
+        return PaginatedMeetingResponse.builder()
+                .content(content)
+                .page(page)
+                .size(size)
+                .totalElements(totalElements)
+                .totalPages(totalPages)
+                .first(page == 0)
+                .last(page >= totalPages - 1)
+                .numberOfElements(content.size())
+                .build();
     }
 
     public List<MeetingResponse> getMeetingsForUser(User user) {

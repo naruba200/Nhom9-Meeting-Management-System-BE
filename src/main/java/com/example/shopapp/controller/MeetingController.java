@@ -7,6 +7,7 @@ import com.example.shopapp.dto.meeting.ConfirmMeetingAttachmentUploadRequest;
 import com.example.shopapp.dto.meeting.InviteMeetingRequest;
 import com.example.shopapp.dto.meeting.MeetingAttachmentResponse;
 import com.example.shopapp.dto.meeting.MeetingResponse;
+import com.example.shopapp.dto.meeting.PaginatedMeetingResponse;
 import com.example.shopapp.dto.meeting.UpdateMeetingAgendaRequest;
 import com.example.shopapp.dto.meeting.UpdateMeetingRequest;
 import com.example.shopapp.entity.User;
@@ -37,9 +38,13 @@ public class MeetingController {
     private final MeetingService meetingService;
 
     @GetMapping
-    public ResponseEntity<List<MeetingResponse>> getMeetings(Authentication authentication) {
+    public ResponseEntity<PaginatedMeetingResponse> getMeetings(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "newest") String sortOrder,
+            Authentication authentication) {
         User user = (User) authentication.getPrincipal();
-        List<MeetingResponse> response = meetingService.getMeetingsForUser(user);
+        PaginatedMeetingResponse response = meetingService.getMeetingsForUserPaginated(user, page, size, sortOrder);
         return ResponseEntity.ok(response);
     }
 
@@ -56,6 +61,9 @@ public class MeetingController {
     public ResponseEntity<MeetingResponse> createMeeting(
             @Valid @RequestBody CreateMeetingRequest request,
             Authentication authentication) {
+        System.out.println("[MeetingController] Received createMeeting request:");
+        System.out.println("[MeetingController] attendeeEmails: " + request.getAttendeeEmails());
+        
         User organizer = (User) authentication.getPrincipal();
         MeetingResponse response = meetingService.createMeeting(request, organizer);
 

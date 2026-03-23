@@ -6,6 +6,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -26,19 +28,47 @@ public class AsyncNotificationService {
      * Bao gồm: lưu attendees + tạo notifications + gửi emails.
      */
     @Async
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void processInvitationAsync(Long meetingId, List<String> attendeeEmails, String organizerEmail) {
         try {
+            log.info("Starting async invitation processing for meeting {}: {}", meetingId, attendeeEmails);
+
             Meeting meeting = meetingRepository.findById(meetingId).orElse(null);
             if (meeting == null) {
                 log.warn("Meeting not found for async invitation processing: {}", meetingId);
                 return;
             }
 
+            // Lưu attendees trước
             notificationService.saveAttendees(meetingId, attendeeEmails);
+            log.info("Saved {} attendees for meeting {}", attendeeEmails.size(), meetingId);
+
+            // Tạo notifications và gửi emails
             notificationService.createInvitationNotifications(meeting, attendeeEmails, organizerEmail);
             log.info("Async invitation processing completed for meeting: {}", meetingId);
         } catch (Exception e) {
             log.error("Error processing async invitation for meeting {}: {}", meetingId, e.getMessage(), e);
+            throw e; // Re-throw để caller biết có lỗi
+        }
+    }
+
+    /**
+     * Xử lý tạo notifications và gửi emails trong background (sau khi attendees đã được lưu).
+     */
+    @Async
+    public void processInvitationNotificationsAsync(Long meetingId, List<String> attendeeEmails, String organizerEmail) {
+        try {
+            Meeting meeting = meetingRepository.findById(meetingId).orElse(null);
+            if (meeting == null) {
+                log.warn("Meeting not found for async invitation notification processing: {}", meetingId);
+                return;
+            }
+
+            // Chỉ tạo notifications và gửi emails (không lưu attendees vì đã lưu trước đó)
+            notificationService.createInvitationNotifications(meeting, attendeeEmails, organizerEmail);
+            log.info("Async invitation notification processing completed for meeting: {}", meetingId);
+        } catch (Exception e) {
+            log.error("Error processing async invitation notification for meeting {}: {}", meetingId, e.getMessage(), e);
         }
     }
 

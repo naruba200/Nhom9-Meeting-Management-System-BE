@@ -13,6 +13,7 @@ import com.example.shopapp.entity.MinutesTask;
 import com.example.shopapp.entity.Task;
 import com.example.shopapp.entity.User;
 import com.example.shopapp.enums.MinutesStatus;
+import com.example.shopapp.repository.MeetingAttendeeRepository;
 import com.example.shopapp.repository.MeetingMinutesRepository;
 import com.example.shopapp.repository.MeetingRepository;
 import com.example.shopapp.repository.MinutesSignatureRepository;
@@ -36,19 +37,58 @@ public class MeetingMinutesService {
     private final MinutesTaskRepository minutesTaskRepository;
     private final MeetingRepository meetingRepository;
     private final TaskRepository taskRepository;
+    private final MeetingAttendeeRepository meetingAttendeeRepository;
 
-    public MeetingMinutesResponse getMinutesByMeeting(Long meetingId) {
+    public MeetingMinutesResponse getMinutesByMeeting(Long meetingId, User user) {
         MeetingMinutes minutes = minutesRepository.findByMeetingId(meetingId)
                 .orElse(null);
         if (minutes == null) {
             return null;
         }
+
+        // Kiểm tra quyền: chỉ organizer hoặc participant mới được xem
+        Meeting meeting = meetingRepository.findById(meetingId)
+                .orElse(null);
+        if (meeting == null) {
+            return null;
+        }
+
+        String userEmail = user.getEmail().trim().toLowerCase();
+        boolean isOrganizer = meeting.getOrganizerEmail().trim().toLowerCase().equals(userEmail);
+        
+        // Kiểm tra participant từ MeetingAttendee
+        boolean isParticipant = meetingAttendeeRepository.findAllByMeetingId(meetingId).stream()
+                .anyMatch(a -> a.getEmail().trim().toLowerCase().equals(userEmail));
+
+        if (!isOrganizer && !isParticipant) {
+            throw new RuntimeException("Bạn không có quyền xem biên bản cuộc họp này");
+        }
+
         return toResponse(minutes);
     }
 
-    public MeetingMinutesResponse getMinutesById(Long minutesId) {
+    public MeetingMinutesResponse getMinutesById(Long minutesId, User user) {
         MeetingMinutes minutes = minutesRepository.findById(minutesId)
                 .orElseThrow(() -> new RuntimeException("Minutes not found"));
+        
+        // Kiểm tra quyền: chỉ organizer hoặc participant mới được xem
+        Meeting meeting = meetingRepository.findById(minutes.getMeetingId())
+                .orElse(null);
+        if (meeting == null) {
+            return null;
+        }
+
+        String userEmail = user.getEmail().trim().toLowerCase();
+        boolean isOrganizer = meeting.getOrganizerEmail().trim().toLowerCase().equals(userEmail);
+        
+        // Kiểm tra participant từ MeetingAttendee
+        boolean isParticipant = meetingAttendeeRepository.findAllByMeetingId(minutes.getMeetingId()).stream()
+                .anyMatch(a -> a.getEmail().trim().toLowerCase().equals(userEmail));
+
+        if (!isOrganizer && !isParticipant) {
+            throw new RuntimeException("Bạn không có quyền xem biên bản cuộc họp này");
+        }
+
         return toResponse(minutes);
     }
 

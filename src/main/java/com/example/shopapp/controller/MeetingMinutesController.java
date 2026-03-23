@@ -32,7 +32,8 @@ public class MeetingMinutesController {
     public ResponseEntity<MeetingMinutesResponse> getMinutesByMeeting(
             @PathVariable Long meetingId,
             Authentication authentication) {
-        MeetingMinutesResponse response = minutesService.getMinutesByMeeting(meetingId);
+        User user = (User) authentication.getPrincipal();
+        MeetingMinutesResponse response = minutesService.getMinutesByMeeting(meetingId, user);
         if (response == null) {
             return ResponseEntity.noContent().build();
         }
@@ -43,7 +44,8 @@ public class MeetingMinutesController {
     public ResponseEntity<MeetingMinutesResponse> getMinutesById(
             @PathVariable Long minutesId,
             Authentication authentication) {
-        MeetingMinutesResponse response = minutesService.getMinutesById(minutesId);
+        User user = (User) authentication.getPrincipal();
+        MeetingMinutesResponse response = minutesService.getMinutesById(minutesId, user);
         return ResponseEntity.ok(response);
     }
 

@@ -10,11 +10,12 @@ import com.example.shopapp.enums.NotificationType;
 import com.example.shopapp.repository.MeetingAttendeeRepository;
 import com.example.shopapp.repository.MeetingRepository;
 import com.example.shopapp.repository.NotificationRepository;
-import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -222,7 +223,13 @@ public class NotificationService {
             attendees.add(attendee);
         }
 
-        meetingAttendeeRepository.saveAll(attendees);
+        List<MeetingAttendee> saved = meetingAttendeeRepository.saveAll(attendees);
+        // Force flush to ensure data is written to database
+        meetingAttendeeRepository.flush();
+
+        // Log for debugging
+        System.out.println("Saved " + saved.size() + " attendees for meeting " + meetingId + ": " +
+            saved.stream().map(MeetingAttendee::getEmail).collect(java.util.stream.Collectors.joining(", ")));
     }
 
     private Set<String> getRecipientsForMeeting(Long meetingId, String organizerEmail) {

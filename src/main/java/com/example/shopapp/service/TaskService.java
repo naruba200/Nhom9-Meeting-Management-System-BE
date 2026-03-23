@@ -5,11 +5,15 @@ import com.example.shopapp.dto.task.SubtaskResponse;
 import com.example.shopapp.dto.task.TaskResponse;
 import com.example.shopapp.dto.task.UpdateTaskRequest;
 import com.example.shopapp.entity.Meeting;
+import com.example.shopapp.entity.MeetingAttendee;
 import com.example.shopapp.entity.Subtask;
 import com.example.shopapp.entity.Task;
 import com.example.shopapp.entity.User;
+import com.example.shopapp.enums.InvitationStatus;
 import com.example.shopapp.enums.NotificationType;
 import com.example.shopapp.enums.TaskStatus;
+import com.example.shopapp.exception.BadRequestException;
+import com.example.shopapp.repository.MeetingAttendeeRepository;
 import com.example.shopapp.repository.MeetingRepository;
 import com.example.shopapp.repository.SubtaskRepository;
 import com.example.shopapp.repository.TaskRepository;
@@ -31,6 +35,7 @@ public class TaskService {
     private final TaskRepository taskRepository;
     private final SubtaskRepository subtaskRepository;
     private final MeetingRepository meetingRepository;
+    private final MeetingAttendeeRepository meetingAttendeeRepository;
     private final NotificationService notificationService;
 
     public List<TaskResponse> getTasksByMeeting(Long meetingId) {
@@ -82,11 +87,20 @@ public class TaskService {
             throw new RuntimeException("Only meeting organizer can create tasks");
         }
 
+        // Check if assignee has accepted the meeting invitation
+        String assigneeEmail = normalizeEmail(request.getAssigneeEmail());
+        MeetingAttendee attendee = meetingAttendeeRepository.findByMeetingIdAndEmail(meetingId, assigneeEmail)
+                .orElseThrow(() -> new BadRequestException("Assignee is not invited to this meeting."));
+
+        if (attendee.getStatus() != InvitationStatus.ACCEPTED) {
+            throw new BadRequestException("Task assignee has not accepted the meeting invitation.");
+        }
+
         Task task = Task.builder()
                 .title(request.getTitle().trim())
                 .description(request.getDescription() != null ? request.getDescription().trim() : null)
                 .status(TaskStatus.TODO)
-                .assigneeEmail(normalizeEmail(request.getAssigneeEmail()))
+                .assigneeEmail(assigneeEmail)
                 .createdByEmail(organizer.getEmail())
                 .meetingId(meetingId)
                 .createdAt(LocalDateTime.now())
@@ -140,9 +154,21 @@ public class TaskService {
             throw new RuntimeException("Only meeting organizer can update tasks");
         }
 
+        // Check if the new assignee has accepted the meeting invitation
+        String newAssigneeEmail = normalizeEmail(request.getAssigneeEmail());
+        if (!newAssigneeEmail.equalsIgnoreCase(task.getAssigneeEmail())) {
+            MeetingAttendee attendee = meetingAttendeeRepository.findByMeetingIdAndEmail(task.getMeetingId(), newAssigneeEmail)
+                    .orElseThrow(() -> new BadRequestException("New assignee is not invited to this meeting."));
+
+            if (attendee.getStatus() != InvitationStatus.ACCEPTED) {
+                throw new BadRequestException("New task assignee has not accepted the meeting invitation.");
+            }
+        }
+
+
         task.setTitle(request.getTitle().trim());
         task.setDescription(request.getDescription() != null ? request.getDescription().trim() : null);
-        task.setAssigneeEmail(normalizeEmail(request.getAssigneeEmail()));
+        task.setAssigneeEmail(newAssigneeEmail);
         task.setUpdatedAt(LocalDateTime.now());
 
         // Clear existing subtasks
