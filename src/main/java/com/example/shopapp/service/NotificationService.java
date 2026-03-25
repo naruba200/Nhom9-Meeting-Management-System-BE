@@ -146,6 +146,16 @@ public class NotificationService {
         createNotifications(recipients, meeting.getId(), NotificationType.MEETING_INVITATION_DECLINED, title, message);
     }
 
+    @Transactional
+    public void createInvitationAcceptedNotification(Meeting meeting, String attendeeEmail) {
+        Set<String> recipients = Set.of(normalizeEmail(meeting.getOrganizerEmail()));
+        String title = "Người tham gia đã chấp nhận lời mời";
+        String message = "Người tham gia " + normalizeEmail(attendeeEmail) + " đã chấp nhận cuộc họp \""
+                + meeting.getTitle() + "\".";
+
+        createNotifications(recipients, meeting.getId(), NotificationType.MEETING_INVITATION_ACCEPTED, title, message);
+    }
+
     @Scheduled(cron = "0 * * * * *")
     @Transactional
     public void createStartingSoonNotifications() {

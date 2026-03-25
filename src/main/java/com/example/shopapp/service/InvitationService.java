@@ -55,10 +55,15 @@ public class InvitationService {
             throw new BadRequestException("Lời mời này đã được phản hồi trước đó");
         }
 
+        Meeting meeting = meetingRepository.findById(attendee.getMeetingId())
+                .orElseThrow(() -> new BadRequestException("Không tìm thấy cuộc họp"));
+
         attendee.setStatus(InvitationStatus.ACCEPTED);
         attendee.setResponseReason(null);
         attendee.setRespondedAt(LocalDateTime.now());
         meetingAttendeeRepository.save(attendee);
+
+        notificationService.createInvitationAcceptedNotification(meeting, attendeeUser.getEmail());
     }
 
     @Transactional
