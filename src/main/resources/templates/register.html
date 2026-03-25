@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Đăng ký</title>
+    <style>
+        .field-error {
+            color: #c0392b;
+            font-size: 0.9rem;
+            margin: 4px 0 10px;
+        }
+        .form-error {
+            color: #c0392b;
+            margin-bottom: 12px;
+        }
+    </style>
+</head>
+<body>
+    <h2>Đăng ký</h2>
+
+    <div class="form-error" th:if="${error}" th:text="${error}"></div>
+
+    <form th:action="@{/auth/register}" th:object="${registerRequest}" method="post">
+        <label for="fullName">Họ tên:</label>
+        <input id="fullName" type="text" th:field="*{fullName}" required maxlength="100"><br>
+        <div class="field-error" th:if="${#fields.hasErrors('fullName')}" th:errors="*{fullName}"></div>
+
+        <label for="email">Email:</label>
+        <input id="email" type="email" th:field="*{email}" required maxlength="255"><br>
+        <div class="field-error" th:if="${#fields.hasErrors('email')}" th:errors="*{email}"></div>
+
+        <label for="phone">SĐT:</label>
+        <input id="phone" type="text" th:field="*{phone}" required pattern="^0\\d{9,10}$"><br>
+        <div class="field-error" th:if="${#fields.hasErrors('phone')}" th:errors="*{phone}"></div>
+
+        <label for="password">Mật khẩu:</label>
+        <input id="password" type="password" th:field="*{password}" required minlength="8" maxlength="100"><br>
+        <div class="field-error" th:if="${#fields.hasErrors('password')}" th:errors="*{password}"></div>
+
+        <button type="submit">Đăng ký</button>
+    </form>
+</body>
+</html>

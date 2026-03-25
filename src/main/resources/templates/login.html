@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Đăng nhập</title>
+    <style>
+        .field-error {
+            color: #c0392b;
+            font-size: 0.9rem;
+            margin: 4px 0 10px;
+        }
+        .form-error {
+            color: #c0392b;
+            margin-bottom: 12px;
+        }
+    </style>
+</head>
+<body>
+    <h2>Đăng nhập</h2>
+
+    <div id="formError" class="form-error" th:if="${error}" th:text="${error}"></div>
+
+    <form id="loginForm" th:object="${loginRequest}">
+        <label for="email">Email:</label>
+        <input type="email" id="email" name="email" th:field="*{email}" required maxlength="255">
+        <div id="emailError" class="field-error" th:if="${#fields.hasErrors('email')}" th:errors="*{email}"></div>
+
+        <label for="password">Mật khẩu:</label>
+        <input type="password" id="password" name="password" th:field="*{password}" required minlength="8" maxlength="100">
+        <div id="passwordError" class="field-error" th:if="${#fields.hasErrors('password')}" th:errors="*{password}"></div>
+
+        <button type="submit">Đăng nhập</button>
+    </form>
+
+    <script>
+        const loginForm = document.getElementById("loginForm");
+        const formError = document.getElementById("formError");
+        const emailError = document.getElementById("emailError");
+        const passwordError = document.getElementById("passwordError");
+
+        function resetErrors() {
+            if (formError) {
+                formError.textContent = "";
+            }
+            if (emailError) {
+                emailError.textContent = "";
+            }
+            if (passwordError) {
+                passwordError.textContent = "";
+            }
+        }
+
+        loginForm.addEventListener("submit", async function (e) {
+            e.preventDefault();
+            resetErrors();
+
+            const email = document.getElementById("email").value.trim();
+            const password = document.getElementById("password").value;
+            let hasClientError = false;
+
+            if (!email) {
+                if (emailError) {
+                    emailError.textContent = "Email không được để trống";
+                }
+                hasClientError = true;
+            }
+
+            if (!password) {
+                if (passwordError) {
+                    passwordError.textContent = "Mật khẩu không được để trống";
+                }
+                hasClientError = true;
+            } else if (password.length < 8) {
+                if (passwordError) {
+                    passwordError.textContent = "Mật khẩu phải từ 8 đến 100 ký tự";
+                }
+                hasClientError = true;
+            }
+
+            if (hasClientError) {
+                return;
+            }
+
+            const res = await fetch("/api/auth/login", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ email, password })
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                localStorage.setItem("token", data.token);
+                window.location.href = "/";
+                return;
+            }
+
+            let errorMessage = "Đăng nhập thất bại";
+            try {
+                const errorData = await res.json();
+                if (errorData && errorData.message) {
+                    errorMessage = errorData.message;
+                }
+            } catch (err) {
+                errorMessage = "Đăng nhập thất bại";
+            }
+
+            if (formError) {
+                formError.textContent = errorMessage;
+            }
+        });
+    </script>
+</body>
+</html>
