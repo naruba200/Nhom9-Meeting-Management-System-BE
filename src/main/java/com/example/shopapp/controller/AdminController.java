@@ -11,8 +11,12 @@ import com.example.shopapp.repository.NotificationRepository;
 import com.example.shopapp.repository.UserRepository;
 import com.example.shopapp.service.AdminUserService;
 import com.example.shopapp.service.ActivityLogService;
+import com.example.shopapp.service.CloudinaryDatabaseBackupService;
+import com.example.shopapp.service.DatabaseBackupService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -24,6 +28,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 @RestController
@@ -36,6 +42,8 @@ public class AdminController {
     private final NotificationRepository notificationRepository;
     private final AdminUserService adminUserService;
     private final ActivityLogService activityLogService;
+    private final DatabaseBackupService databaseBackupService;
+    private final CloudinaryDatabaseBackupService cloudinaryDatabaseBackupService;
 
     @GetMapping("/dashboard/stats")
     public ResponseEntity<AdminDashboardStats> getDashboardStats() {
@@ -113,5 +121,44 @@ public class AdminController {
         System.out.println("[AdminController] Fetching activity logs for user: " + userId);
         PaginatedActivityLogResponse response = activityLogService.getActivityLogsByUser(userId, page, size);
         return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/activities/export")
+    public ResponseEntity<byte[]> exportActivityLogs(
+            @RequestParam(required = false) String actionType,
+            @RequestParam(required = false) String entityType,
+            @RequestParam(required = false) String userEmail,
+            @RequestParam(required = false) String startDate,
+            @RequestParam(required = false) String endDate) {
+        byte[] csvBytes = activityLogService.exportActivityLogsAsCsv(
+                actionType,
+                entityType,
+                userEmail,
+                startDate,
+                endDate);
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=activity-logs.csv")
+                .contentType(MediaType.parseMediaType("text/csv"))
+                .body(csvBytes);
+    }
+
+    @PostMapping("/database/backup")
+    public ResponseEntity<byte[]> createDatabaseBackup() {
+        byte[] backupBytes = databaseBackupService.createMySqlDump();
+        String fileName = "meeting-manage-backup-" +
+                LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")) +
+            ".sql";
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + fileName + "\"")
+            .contentType(MediaType.parseMediaType("application/sql"))
+                .body(backupBytes);
+    }
+
+    @PostMapping("/database/backup/cloudinary")
+    public ResponseEntity<String> createCloudinaryBackupNow() {
+        cloudinaryDatabaseBackupService.createAndUploadBackup();
+        return ResponseEntity.ok("Cloudinary backup created successfully");
     }
 }

@@ -18,8 +18,12 @@ public class AuthController {
     private final AuthService authService;
 
     @PostMapping("/register")
-    public ResponseEntity<String> register(@Valid @RequestBody RegisterRequest request) {
-        authService.register(request);
+    public ResponseEntity<String> register(@Valid @RequestBody RegisterRequest request,
+                                           HttpServletRequest httpServletRequest) {
+        authService.register(
+                request,
+                httpServletRequest.getRemoteAddr(),
+                httpServletRequest.getHeader("User-Agent"));
         return ResponseEntity.ok("✅ OTP sent to email");
     }
 
@@ -39,14 +43,22 @@ public class AuthController {
     }
 
     @PostMapping("/forgot-password")
-    public ResponseEntity<String> forgotPassword(@RequestBody ForgotPasswordRequest request) {
-        authService.forgotPassword(request);
+    public ResponseEntity<String> forgotPassword(@RequestBody ForgotPasswordRequest request,
+                                                 HttpServletRequest httpServletRequest) {
+        authService.forgotPassword(
+                request,
+                httpServletRequest.getRemoteAddr(),
+                httpServletRequest.getHeader("User-Agent"));
         return ResponseEntity.ok("✅ Password reset token sent");
     }
 
     @PostMapping("/reset-password")
-    public ResponseEntity<String> resetPassword(@RequestBody ResetPasswordRequest request) {
-        authService.resetPassword(request);
+    public ResponseEntity<String> resetPassword(@RequestBody ResetPasswordRequest request,
+                                                HttpServletRequest httpServletRequest) {
+        authService.resetPassword(
+                request,
+                httpServletRequest.getRemoteAddr(),
+                httpServletRequest.getHeader("User-Agent"));
         return ResponseEntity.ok("✅ Password has been reset");
     }
 
@@ -59,9 +71,14 @@ public class AuthController {
     @PutMapping("/profile")
     public ResponseEntity<UserProfileResponse> updateProfile(
             @RequestHeader("Authorization") String authHeader,
-            @RequestBody UpdateProfileRequest request) {
+            @RequestBody UpdateProfileRequest request,
+            HttpServletRequest httpServletRequest) {
         String token = extractBearerToken(authHeader);
-        return ResponseEntity.ok(authService.updateUserProfile(token, request));
+        return ResponseEntity.ok(authService.updateUserProfile(
+                token,
+                request,
+                httpServletRequest.getRemoteAddr(),
+                httpServletRequest.getHeader("User-Agent")));
     }
 
     @GetMapping("/google/link-url")
@@ -112,9 +129,13 @@ public class AuthController {
     }
 
     @PostMapping("/logout")
-    public ResponseEntity<String> logout(@RequestHeader("Authorization") String authHeader) {
-        // Token validation happens via JWT filter authentication
-        // Logout is handled client-side by removing token, but we log the event here
+    public ResponseEntity<String> logout(@RequestHeader("Authorization") String authHeader,
+                                         HttpServletRequest httpServletRequest) {
+        String token = extractBearerToken(authHeader);
+        authService.logout(
+                token,
+                httpServletRequest.getRemoteAddr(),
+                httpServletRequest.getHeader("User-Agent"));
         return ResponseEntity.ok("✅ Logged out successfully");
     }
 

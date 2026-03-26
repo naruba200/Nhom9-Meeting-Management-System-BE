@@ -3,11 +3,15 @@ package com.example.shopapp.service;
 import com.example.shopapp.dto.admin.AdminCreateUserRequest;
 import com.example.shopapp.dto.admin.AdminUpdateUserRequest;
 import com.example.shopapp.dto.admin.AdminUserResponse;
+import com.example.shopapp.entity.ActivityActionType;
+import com.example.shopapp.entity.ActivityEntityType;
 import com.example.shopapp.entity.User;
 import com.example.shopapp.exception.BadRequestException;
 import com.example.shopapp.repository.UserRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -20,6 +24,7 @@ public class AdminUserService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final ActivityLogService activityLogService;
 
     public List<AdminUserResponse> getAllUsers() {
         return userRepository.findAll().stream()
@@ -92,10 +97,30 @@ public class AdminUserService {
 
     @Transactional
     public void deleteUser(Long id) {
-        if (!userRepository.existsById(id)) {
-            throw new BadRequestException("Không tìm thấy người dùng với ID: " + id);
-        }
+        User targetUser = userRepository.findById(id)
+                .orElseThrow(() -> new BadRequestException("Không tìm thấy người dùng với ID: " + id));
+
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        User actor = (authentication != null && authentication.getPrincipal() instanceof User authenticatedUser)
+            ? authenticatedUser
+            : null;
+
+        activityLogService.deleteLogsByUserId(id);
+
         userRepository.deleteById(id);
+
+        if (actor != null && !actor.getId().equals(id)) {
+            activityLogService.logActivity(
+                    actor,
+                    ActivityActionType.DELETE,
+                    ActivityEntityType.USER,
+                    targetUser.getId(),
+                    "Deleted user",
+                    null,
+                    null,
+                    200,
+                    "{\"deletedUserEmail\":\"" + targetUser.getEmail() + "\"}");
+        }
     }
 
     private AdminUserResponse mapToResponse(User user) {

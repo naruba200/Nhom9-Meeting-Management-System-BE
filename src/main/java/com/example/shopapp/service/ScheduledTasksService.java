@@ -18,6 +18,7 @@ import java.util.List;
 public class ScheduledTasksService {
 
     private final MeetingAttendeeRepository meetingAttendeeRepository;
+    private final CloudinaryDatabaseBackupService cloudinaryDatabaseBackupService;
 
     /**
      * Chạy mỗi phút để tự động từ chối các lời mời quá hạn.
@@ -52,5 +53,18 @@ public class ScheduledTasksService {
         }
 
         log.info("[ScheduledTask] Auto-declined {} invitations", declinedCount);
+    }
+
+    /**
+     * Chạy tự động lúc 00:00 và 12:00 mỗi ngày để sao lưu CSDL lên Cloudinary.
+     */
+    @Scheduled(cron = "0 0 0,12 * * *", zone = "${backup.cloudinary.timezone:Asia/Ho_Chi_Minh}")
+    public void autoBackupDatabaseToCloudinary() {
+        try {
+            log.info("[ScheduledTask] Running autoBackupDatabaseToCloudinary");
+            cloudinaryDatabaseBackupService.createAndUploadBackup();
+        } catch (Exception ex) {
+            log.error("[ScheduledTask] Failed to upload scheduled DB backup to Cloudinary", ex);
+        }
     }
 }

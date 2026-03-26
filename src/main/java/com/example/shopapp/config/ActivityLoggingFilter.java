@@ -94,6 +94,11 @@ public class ActivityLoggingFilter extends OncePerRequestFilter {
             return false;
         }
 
+        // Explicitly logged in AdminUserService to include deletion details.
+        if ("DELETE".equalsIgnoreCase(method) && path.matches("^/api/admin/users/\\d+$")) {
+            return false;
+        }
+
         // User requested to avoid logging page-view/read operations.
         // Keep only action-oriented GET endpoints such as export/download.
         if ("GET".equalsIgnoreCase(method)

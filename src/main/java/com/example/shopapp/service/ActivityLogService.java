@@ -14,9 +14,13 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
+
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.StringJoiner;
 import java.util.stream.Collectors;
 
 @Service
@@ -54,6 +58,11 @@ public class ActivityLogService {
         activityLogRepository.save(log);
     }
 
+    @Transactional
+    public void deleteLogsByUserId(Long userId) {
+        activityLogRepository.deleteByUserId(userId);
+    }
+
     public PaginatedActivityLogResponse getActivityLogs(
             int page, int size,
             String actionType, String entityType, String userEmail,
@@ -64,31 +73,53 @@ public class ActivityLogService {
 
         Pageable pageable = PageRequest.of(page, size, Sort.Direction.fromString(direction), "timestamp");
 
-        ActivityActionType action = null;
-        ActivityEntityType entity = null;
-        LocalDateTime start = null;
-        LocalDateTime end = null;
+        ActivityFilterCriteria criteria = parseFilterCriteria(actionType, entityType, startDate, endDate);
 
-        try {
-            if (actionType != null && !actionType.isEmpty()) {
-                action = ActivityActionType.valueOf(actionType.toUpperCase());
-            }
-            if (entityType != null && !entityType.isEmpty()) {
-                entity = ActivityEntityType.valueOf(entityType.toUpperCase());
-            }
-            if (startDate != null && !startDate.isEmpty()) {
-                start = LocalDateTime.parse(startDate, DateTimeFormatter.ISO_LOCAL_DATE_TIME);
-            }
-            if (endDate != null && !endDate.isEmpty()) {
-                end = LocalDateTime.parse(endDate, DateTimeFormatter.ISO_LOCAL_DATE_TIME);
-            }
-        } catch (IllegalArgumentException e) {
-            System.err.println("[ActivityLogService] Invalid filter parameters: " + e.getMessage());
-        }
-
-        Page<ActivityLog> logs = activityLogRepository.searchActivityLogs(action, entity, userEmail, start, end, pageable);
+        Page<ActivityLog> logs = activityLogRepository.searchActivityLogs(
+                criteria.actionType(),
+                criteria.entityType(),
+                userEmail,
+                criteria.startDate(),
+                criteria.endDate(),
+                pageable);
 
         return mapToResponse(logs);
+    }
+
+    public byte[] exportActivityLogsAsCsv(
+            String actionType,
+            String entityType,
+            String userEmail,
+            String startDate,
+            String endDate) {
+        ActivityFilterCriteria criteria = parseFilterCriteria(actionType, entityType, startDate, endDate);
+
+        List<ActivityLog> logs = activityLogRepository.findActivityLogsForExport(
+                criteria.actionType(),
+                criteria.entityType(),
+                userEmail,
+                criteria.startDate(),
+                criteria.endDate());
+
+        StringBuilder csv = new StringBuilder();
+        csv.append("Timestamp,User Email,User Full Name,Action,Entity Type,Entity ID,Description,IP Address,Status Code,User Agent\n");
+
+        for (ActivityLog log : logs) {
+            StringJoiner row = new StringJoiner(",");
+            row.add(escapeCsv(log.getTimestamp() != null ? log.getTimestamp().format(DATE_FORMATTER) : ""));
+            row.add(escapeCsv(log.getUser() != null ? log.getUser().getEmail() : ""));
+            row.add(escapeCsv(log.getUser() != null ? log.getUser().getFullName() : ""));
+            row.add(escapeCsv(log.getActionType() != null ? log.getActionType().toString() : ""));
+            row.add(escapeCsv(log.getEntityType() != null ? log.getEntityType().toString() : ""));
+            row.add(escapeCsv(log.getEntityId() != null ? String.valueOf(log.getEntityId()) : ""));
+            row.add(escapeCsv(log.getDescription()));
+            row.add(escapeCsv(log.getIpAddress()));
+            row.add(escapeCsv(log.getStatusCode() != null ? String.valueOf(log.getStatusCode()) : ""));
+            row.add(escapeCsv(log.getUserAgent()));
+            csv.append(row).append("\n");
+        }
+
+        return csv.toString().getBytes(StandardCharsets.UTF_8);
     }
 
     public PaginatedActivityLogResponse getActivityLogsByUser(Long userId, int page, int size) {
@@ -155,5 +186,47 @@ public class ActivityLogService {
                 .timestamp(log.getTimestamp().format(DATE_FORMATTER))
                 .details(log.getDetails())
                 .build();
+    }
+
+    private ActivityFilterCriteria parseFilterCriteria(String actionType, String entityType, String startDate, String endDate) {
+        ActivityActionType action = null;
+        ActivityEntityType entity = null;
+        LocalDateTime start = null;
+        LocalDateTime end = null;
+
+        try {
+            if (StringUtils.hasText(actionType)) {
+                action = ActivityActionType.valueOf(actionType.toUpperCase());
+            }
+            if (StringUtils.hasText(entityType)) {
+                entity = ActivityEntityType.valueOf(entityType.toUpperCase());
+            }
+            if (StringUtils.hasText(startDate)) {
+                start = LocalDateTime.parse(startDate, DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+            }
+            if (StringUtils.hasText(endDate)) {
+                end = LocalDateTime.parse(endDate, DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+            }
+        } catch (IllegalArgumentException e) {
+            System.err.println("[ActivityLogService] Invalid filter parameters: " + e.getMessage());
+        }
+
+        return new ActivityFilterCriteria(action, entity, start, end);
+    }
+
+    private String escapeCsv(String value) {
+        if (value == null) {
+            return "\"\"";
+        }
+        String escaped = value.replace("\"", "\"\"");
+        return "\"" + escaped + "\"";
+    }
+
+    private record ActivityFilterCriteria(
+            ActivityActionType actionType,
+            ActivityEntityType entityType,
+            LocalDateTime startDate,
+            LocalDateTime endDate
+    ) {
     }
 }

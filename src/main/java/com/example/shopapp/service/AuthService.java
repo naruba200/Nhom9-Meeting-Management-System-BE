@@ -28,6 +28,10 @@ public class AuthService {
 
     // Đăng ký
     public String register(RegisterRequest request) {
+        return register(request, null, null);
+    }
+
+    public String register(RegisterRequest request, String ipAddress, String userAgent) {
         if (userRepository.existsByEmail(request.getEmail())) {
             throw new RuntimeException("Email đã được đăng ký");
         }
@@ -41,6 +45,17 @@ public class AuthService {
                 .build();
 
         userRepository.save(user);
+
+    activityLogService.logActivity(
+        user,
+        ActivityActionType.CREATE,
+        ActivityEntityType.USER,
+        user.getId(),
+        "User account registered",
+        ipAddress,
+        userAgent,
+        200);
+
         sendOtp(request.getEmail()); // Gửi OTP
 
         return "Đăng ký thành công. Vui lòng xác minh email với mã OTP.";
@@ -134,6 +149,10 @@ public class AuthService {
 
     // Gửi token quên mật khẩu
     public String forgotPassword(ForgotPasswordRequest request) {
+        return forgotPassword(request, null, null);
+    }
+
+    public String forgotPassword(ForgotPasswordRequest request, String ipAddress, String userAgent) {
         User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new RuntimeException("Email không tồn tại"));
 
@@ -155,12 +174,27 @@ public class AuthService {
                 "🔐 Token đặt lại mật khẩu",
                 "Token đặt lại mật khẩu của bạn là:\n\n" + token + "\n\nToken sẽ hết hạn sau 10 phút.");
 
+        activityLogService.logActivity(
+            user,
+            ActivityActionType.UPDATE,
+            ActivityEntityType.SYSTEM,
+            user.getId(),
+            "Requested password reset token",
+            ipAddress,
+            userAgent,
+            200);
+
         return "Đã gửi token đặt lại mật khẩu qua email.";
     }
 
     // Đặt lại mật khẩu
     @Transactional
     public String resetPassword(ResetPasswordRequest request) {
+        return resetPassword(request, null, null);
+    }
+
+    @Transactional
+    public String resetPassword(ResetPasswordRequest request, String ipAddress, String userAgent) {
         PasswordResetToken resetToken = passwordResetTokenRepository.findByToken(request.getToken())
                 .orElseThrow(() -> new RuntimeException("Token không hợp lệ"));
 
@@ -176,7 +210,35 @@ public class AuthService {
         resetToken.setUsed(true);
         passwordResetTokenRepository.save(resetToken);
 
+        activityLogService.logActivity(
+                user,
+                ActivityActionType.UPDATE,
+                ActivityEntityType.SYSTEM,
+                user.getId(),
+                "Password reset successful",
+                ipAddress,
+                userAgent,
+                200);
+
         return "Đặt lại mật khẩu thành công.";
+    }
+
+    public void logout(String token, String ipAddress, String userAgent) {
+        if (token == null || token.isBlank() || !jwtUtil.validateToken(token)) {
+            return;
+        }
+
+        String email = jwtUtil.getEmailFromToken(token);
+        userRepository.findByEmail(email).ifPresent(user ->
+                activityLogService.logActivity(
+                        user,
+                        ActivityActionType.LOGOUT,
+                        ActivityEntityType.SYSTEM,
+                        user.getId(),
+                        "User logout successful",
+                        ipAddress,
+                        userAgent,
+                        200));
     }
 
     // Lấy thông tin người dùng từ token
@@ -202,6 +264,11 @@ public class AuthService {
     // Cập nhật thông tin người dùng
     @Transactional
     public UserProfileResponse updateUserProfile(String token, UpdateProfileRequest request) {
+        return updateUserProfile(token, request, null, null);
+    }
+
+    @Transactional
+    public UserProfileResponse updateUserProfile(String token, UpdateProfileRequest request, String ipAddress, String userAgent) {
         if (!jwtUtil.validateToken(token)) {
             throw new RuntimeException("Token không hợp lệ");
         }
@@ -218,6 +285,16 @@ public class AuthService {
         }
 
         userRepository.save(user);
+
+    activityLogService.logActivity(
+        user,
+        ActivityActionType.UPDATE,
+        ActivityEntityType.USER,
+        user.getId(),
+        "Updated user profile",
+        ipAddress,
+        userAgent,
+        200);
 
         return UserProfileResponse.builder()
                 .id(user.getId())
