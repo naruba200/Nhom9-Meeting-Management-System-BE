@@ -42,6 +42,17 @@ public class GlobalExceptionHandler {
 				.body(errorBody(HttpStatus.FORBIDDEN, "Bạn không có quyền truy cập tài nguyên này"));
 	}
 
+	@ExceptionHandler(UnsupportedOperationException.class)
+	public ResponseEntity<Map<String, Object>> handleUnsupportedOperation(UnsupportedOperationException ex) {
+		System.err.println("============================================");
+		System.err.println("[UnsupportedOperationException] Caught!");
+		System.err.println("Message: " + ex.getMessage());
+		System.err.println("Stack trace:");
+		ex.printStackTrace();
+		System.err.println("============================================");
+		return ResponseEntity.badRequest().body(errorBody(HttpStatus.BAD_REQUEST, "Lỗi thao tác không được hỗ trợ: " + safeMessage(ex.getMessage())));
+	}
+
 	@ExceptionHandler(RuntimeException.class)
 	public ResponseEntity<Map<String, Object>> handleRuntime(RuntimeException ex) {
 		return ResponseEntity.badRequest().body(errorBody(HttpStatus.BAD_REQUEST, safeMessage(ex.getMessage())));

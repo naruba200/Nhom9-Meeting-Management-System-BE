@@ -144,55 +144,72 @@ public class MeetingService {
     }
 
     public PaginatedMeetingResponse getMeetingsForUserPaginated(User user, int page, int size, String sortOrder) {
-        String userEmail = user.getEmail();
+        System.out.println("[MeetingService] getMeetingsForUserPaginated - user: " + user.getEmail() + ", page: " + page + ", size: " + size + ", sortOrder: " + sortOrder);
+        
+        try {
+            String userEmail = user.getEmail();
 
-        List<Meeting> organizerMeetings = meetingRepository.findAllByOrganizerEmailOrderByStartTimeDesc(userEmail);
+            List<Meeting> organizerMeetings = meetingRepository.findAllByOrganizerEmailOrderByStartTimeDesc(userEmail);
+            System.out.println("[MeetingService] organizerMeetings count: " + organizerMeetings.size());
 
-        List<Long> acceptedMeetingIds = meetingAttendeeRepository
-                .findAllByEmailAndStatus(userEmail, InvitationStatus.ACCEPTED)
-                .stream()
-                .map(MeetingAttendee::getMeetingId)
-                .distinct()
-                .toList();
+            List<Long> acceptedMeetingIds = meetingAttendeeRepository
+                    .findAllByEmailAndStatus(userEmail, InvitationStatus.ACCEPTED)
+                    .stream()
+                    .map(MeetingAttendee::getMeetingId)
+                    .distinct()
+                    .toList();
+            System.out.println("[MeetingService] acceptedMeetingIds count: " + acceptedMeetingIds.size());
 
-        List<Meeting> attendeeMeetings = acceptedMeetingIds.isEmpty()
-                ? List.of()
-                : meetingRepository.findAllByIdInOrderByStartTimeDesc(acceptedMeetingIds);
+            List<Meeting> attendeeMeetings = acceptedMeetingIds.isEmpty()
+                    ? List.of()
+                    : meetingRepository.findAllByIdInOrderByStartTimeDesc(acceptedMeetingIds);
+            System.out.println("[MeetingService] attendeeMeetings count: " + attendeeMeetings.size());
 
-        List<Meeting> mergedMeetings = mergeMeetings(organizerMeetings, attendeeMeetings);
-        applyTimeBasedStatusTransitions(mergedMeetings, LocalDateTime.now());
+            List<Meeting> mergedMeetings = mergeMeetings(organizerMeetings, attendeeMeetings);
+            System.out.println("[MeetingService] mergedMeetings count: " + mergedMeetings.size());
+            
+            applyTimeBasedStatusTransitions(mergedMeetings, LocalDateTime.now());
+            System.out.println("[MeetingService] After status transition count: " + mergedMeetings.size());
 
-        // Sort
-        if ("oldest".equalsIgnoreCase(sortOrder)) {
-            mergedMeetings.sort(Comparator.comparing(Meeting::getStartTime));
-        } else {
-            mergedMeetings.sort(Comparator.comparing(Meeting::getStartTime).reversed());
+            // Sort - convert to mutable ArrayList first to avoid UnsupportedOperationException
+            List<Meeting> sortedMeetings = new ArrayList<>(mergedMeetings);
+            if ("oldest".equalsIgnoreCase(sortOrder)) {
+                sortedMeetings.sort(Comparator.comparing(Meeting::getStartTime));
+            } else {
+                sortedMeetings.sort(Comparator.comparing(Meeting::getStartTime).reversed());
+            }
+
+            // Pagination
+            long totalElements = sortedMeetings.size();
+            int totalPages = (int) Math.ceil((double) totalElements / size);
+            int fromIndex = page * size;
+            int toIndex = Math.min(fromIndex + size, (int) totalElements);
+
+            List<Meeting> paginatedMeetings = fromIndex >= totalElements
+                    ? List.of()
+                    : sortedMeetings.subList(fromIndex, toIndex);
+
+            List<MeetingResponse> content = paginatedMeetings.stream()
+                    .map(this::toResponse)
+                    .toList();
+
+            System.out.println("[MeetingService] Returning response with totalElements: " + totalElements + ", totalPages: " + totalPages);
+            
+            return PaginatedMeetingResponse.builder()
+                    .content(content)
+                    .page(page)
+                    .size(size)
+                    .totalElements(totalElements)
+                    .totalPages(totalPages)
+                    .first(page == 0)
+                    .last(page >= totalPages - 1)
+                    .numberOfElements(content.size())
+                    .build();
+        } catch (Exception e) {
+            System.err.println("[MeetingService] Error: " + e.getMessage());
+            e.printStackTrace();
+            throw e;
         }
-
-        // Pagination
-        long totalElements = mergedMeetings.size();
-        int totalPages = (int) Math.ceil((double) totalElements / size);
-        int fromIndex = page * size;
-        int toIndex = Math.min(fromIndex + size, (int) totalElements);
-
-        List<Meeting> paginatedMeetings = fromIndex >= totalElements
-                ? List.of()
-                : mergedMeetings.subList(fromIndex, toIndex);
-
-        List<MeetingResponse> content = paginatedMeetings.stream()
-                .map(this::toResponse)
-                .toList();
-
-        return PaginatedMeetingResponse.builder()
-                .content(content)
-                .page(page)
-                .size(size)
-                .totalElements(totalElements)
-                .totalPages(totalPages)
-                .first(page == 0)
-                .last(page >= totalPages - 1)
-                .numberOfElements(content.size())
-                .build();
     }
 
     public List<MeetingResponse> getMeetingsForUser(User user) {

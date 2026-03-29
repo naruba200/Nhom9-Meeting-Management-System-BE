@@ -51,4 +51,7 @@ public class Task {
 
     @Column
     private LocalDateTime completedAt;
+
+    @Column
+    private LocalDateTime dueDate;
 }

@@ -8,6 +8,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Getter
@@ -26,6 +27,8 @@ public class CreateTaskRequest {
 
     @NotBlank(message = "Email người được giao công việc không được để trống")
     private String assigneeEmail;
+
+    private LocalDateTime dueDate;
 
     private List<String> subtaskTitles;
 }

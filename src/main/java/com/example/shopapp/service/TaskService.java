@@ -105,6 +105,7 @@ public class TaskService {
                 .meetingId(meetingId)
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
+                .dueDate(request.getDueDate())
                 .subtasks(new ArrayList<>())
                 .build();
 
@@ -169,6 +170,7 @@ public class TaskService {
         task.setTitle(request.getTitle().trim());
         task.setDescription(request.getDescription() != null ? request.getDescription().trim() : null);
         task.setAssigneeEmail(newAssigneeEmail);
+        task.setDueDate(request.getDueDate());
         task.setUpdatedAt(LocalDateTime.now());
 
         // Clear existing subtasks
@@ -295,6 +297,7 @@ public class TaskService {
                 .createdAt(task.getCreatedAt())
                 .updatedAt(task.getUpdatedAt())
                 .completedAt(task.getCompletedAt())
+                .dueDate(task.getDueDate())
                 .build();
     }
 
@@ -321,6 +324,7 @@ public class TaskService {
                 .createdAt(task.getCreatedAt())
                 .updatedAt(task.getUpdatedAt())
                 .completedAt(task.getCompletedAt())
+                .dueDate(task.getDueDate())
                 .build();
     }
 
