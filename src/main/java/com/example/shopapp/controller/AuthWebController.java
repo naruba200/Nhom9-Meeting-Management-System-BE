@@ -2,9 +2,11 @@ package com.example.shopapp.controller;
 
 import com.example.shopapp.dto.auth.*;
 import com.example.shopapp.service.AuthService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
+import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.*;
 
 @Controller
@@ -15,7 +17,13 @@ public class AuthWebController {
     private final AuthService authService;
 
     @PostMapping("/register")
-    public String handleRegister(RegisterRequest request, Model model) {
+    public String handleRegister(@Valid @ModelAttribute("registerRequest") RegisterRequest request,
+                                 BindingResult bindingResult,
+                                 Model model) {
+        if (bindingResult.hasErrors()) {
+            return "register";
+        }
+
         try {
             authService.register(request);
             model.addAttribute("email", request.getEmail());
@@ -39,7 +47,13 @@ public class AuthWebController {
     }
 
     @PostMapping("/login")
-    public String handleLogin(LoginRequest request, Model model) {
+    public String handleLogin(@Valid @ModelAttribute("loginRequest") LoginRequest request,
+                              BindingResult bindingResult,
+                              Model model) {
+        if (bindingResult.hasErrors()) {
+            return "login";
+        }
+
         try {
             AuthResponse response = authService.login(request);
             model.addAttribute("message", "Đăng nhập thành công");

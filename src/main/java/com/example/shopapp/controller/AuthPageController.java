@@ -5,13 +5,16 @@ import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
+import com.example.shopapp.dto.auth.LoginRequest;
 import com.example.shopapp.dto.auth.OtpRequest;
+import com.example.shopapp.dto.auth.RegisterRequest;
 
 @Controller
 public class AuthPageController {
 
     @GetMapping("/register")
-    public String showRegisterForm() {
+    public String showRegisterForm(Model model) {
+        model.addAttribute("registerRequest", new RegisterRequest());
         return "register";
     }
 
@@ -24,7 +27,8 @@ public class AuthPageController {
     }
 
     @GetMapping("/login")
-    public String showLoginForm() {
+    public String showLoginForm(Model model) {
+        model.addAttribute("loginRequest", new LoginRequest());
         return "login";
     }
 

@@ -11,7 +11,9 @@ import org.springframework.security.web.authentication.WebAuthenticationDetailsS
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
-import java.util.Collections;
+import java.util.List;
+
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
 @Component
 @RequiredArgsConstructor
@@ -42,8 +44,15 @@ public class JwtAuthenticationFilter extends GenericFilter {
                 String email = jwtUtil.getEmailFromToken(token);
 
                 userRepository.findByEmail(email).ifPresent(user -> {
+                    String role = jwtUtil.getRoleFromToken(token);
+                    if (role == null) {
+                        role = user.getRole(); // Fallback to database role
+                    }
+                    List<SimpleGrantedAuthority> authorities = List.of(
+                            new SimpleGrantedAuthority("ROLE_" + role)
+                    );
                     UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(user,
-                            null, Collections.emptyList());
+                            null, authorities);
                     authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(http));
                     SecurityContextHolder.getContext().setAuthentication(authentication);
                 });

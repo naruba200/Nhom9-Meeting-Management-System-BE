@@ -12,13 +12,27 @@ public class JwtUtil {
 
     // 🔐 Khoá bí mật – có thể chuyển sang lấy từ `application.properties`
     private final String jwtSecret = "jwt-secret-key-that-is-long-enough-for-security";
-    private final long jwtExpirationMs = 86400000; // 1 ngày
+    private final long jwtExpirationMs = 604800000; 
 
     private Key getSigningKey() {
         return Keys.hmacShaKeyFor(jwtSecret.getBytes());
     }
 
-    // 👉 Tạo token
+    // 👉 Tạo token với role
+    public String generateToken(String email, String role) {
+        Date now = new Date();
+        Date expiry = new Date(now.getTime() + jwtExpirationMs);
+
+        return Jwts.builder()
+                .setSubject(email)
+                .claim("role", role)
+                .setIssuedAt(now)
+                .setExpiration(expiry)
+                .signWith(getSigningKey(), SignatureAlgorithm.HS256)
+                .compact();
+    }
+
+    // 👉 Tạo token đơn giản (cho password reset)
     public String generateToken(String email) {
         Date now = new Date();
         Date expiry = new Date(now.getTime() + jwtExpirationMs);
@@ -29,6 +43,16 @@ public class JwtUtil {
                 .setExpiration(expiry)
                 .signWith(getSigningKey(), SignatureAlgorithm.HS256)
                 .compact();
+    }
+
+    // 👉 Trích xuất role từ token
+    public String getRoleFromToken(String token) {
+        return Jwts.parserBuilder()
+                .setSigningKey(getSigningKey())
+                .build()
+                .parseClaimsJws(token)
+                .getBody()
+                .get("role", String.class);
     }
 
     // 👉 Trích xuất email từ token

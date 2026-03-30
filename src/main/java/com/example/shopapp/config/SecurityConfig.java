@@ -31,6 +31,8 @@ public class SecurityConfig {
                                                 .requestMatchers("/css/**", "/js/**", "/images/**").permitAll()
                                                 .requestMatchers("/", "/store.css", "/scriptstore.js", "/api/products")
                                                 .permitAll()
+                                                // admin endpoints - chỉ ADMIN mới được truy cập
+                                                .requestMatchers("/api/admin/**").hasRole("ADMIN")
                                                 // các request còn lại thì phải có JWT
                                                 .anyRequest().authenticated())
                                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

@@ -3,6 +3,7 @@ package com.example.shopapp.service;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
@@ -16,6 +17,15 @@ public class EmailService {
     private final String FROM_EMAIL = "nguyengiangsun@gmail.com";
 
     public void sendEmail(String to, String subject, String body) {
+        doSendEmail(to, subject, body);
+    }
+
+    @Async
+    public void sendEmailAsync(String to, String subject, String body) {
+        doSendEmail(to, subject, body);
+    }
+
+    private void doSendEmail(String to, String subject, String body) {
         try {
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
@@ -27,7 +37,7 @@ public class EmailService {
 
             mailSender.send(message);
             System.out.println("✅ Gửi email thành công đến: " + to);
-        } catch (MessagingException e) {
+        } catch (MessagingException | RuntimeException e) {
             System.err.println("❌ Lỗi gửi email: " + e.getMessage());
         }
     }
