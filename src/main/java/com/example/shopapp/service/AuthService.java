@@ -24,6 +24,7 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
     private final GoogleOAuthService googleOAuthService;
+    private final ActivityLogService activityLogService;
 
     // Đăng ký
     public String register(RegisterRequest request) {
@@ -103,6 +104,10 @@ public class AuthService {
 
     // Đăng nhập
     public AuthResponse login(LoginRequest request) {
+        return login(request, null, null);
+    }
+
+    public AuthResponse login(LoginRequest request, String ipAddress, String userAgent) {
         User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new RuntimeException("Email chưa đăng ký"));
 
@@ -113,6 +118,16 @@ public class AuthService {
             throw new RuntimeException("Mật khẩu không chính xác");
 
         String token = jwtUtil.generateToken(user.getEmail(), user.getRole());
+
+        activityLogService.logActivity(
+                user,
+                ActivityActionType.LOGIN,
+                ActivityEntityType.SYSTEM,
+                user.getId(),
+                "User login successful",
+                ipAddress,
+                userAgent,
+                200);
 
         return new AuthResponse(token, user.getEmail(), user.getFullName(), user.getRole());
     }

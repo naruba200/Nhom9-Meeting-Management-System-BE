@@ -3,6 +3,7 @@ package com.example.shopapp.controller;
 import com.example.shopapp.dto.auth.*;
 import com.example.shopapp.exception.BadRequestException;
 import com.example.shopapp.service.AuthService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
@@ -29,8 +30,12 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
-        return ResponseEntity.ok(authService.login(request));
+    public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request,
+                                              HttpServletRequest httpServletRequest) {
+        return ResponseEntity.ok(authService.login(
+                request,
+                httpServletRequest.getRemoteAddr(),
+                httpServletRequest.getHeader("User-Agent")));
     }
 
     @PostMapping("/forgot-password")
@@ -104,6 +109,13 @@ public class AuthController {
                     .header(HttpHeaders.CONTENT_TYPE, "text/html; charset=UTF-8")
                     .body(errorHtml);
         }
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<String> logout(@RequestHeader("Authorization") String authHeader) {
+        // Token validation happens via JWT filter authentication
+        // Logout is handled client-side by removing token, but we log the event here
+        return ResponseEntity.ok("✅ Logged out successfully");
     }
 
     private String extractBearerToken(String authHeader) {

@@ -15,6 +15,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 public class SecurityConfig {
 
         private final JwtAuthenticationFilter jwtAuthenticationFilter;
+        private final ActivityLoggingFilter activityLoggingFilter;
 
         @Bean
         public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -35,7 +36,8 @@ public class SecurityConfig {
                                                 .requestMatchers("/api/admin/**").hasRole("ADMIN")
                                                 // các request còn lại thì phải có JWT
                                                 .anyRequest().authenticated())
-                                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+                                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                                .addFilterAfter(activityLoggingFilter, JwtAuthenticationFilter.class);
 
                 return http.build();
         }
