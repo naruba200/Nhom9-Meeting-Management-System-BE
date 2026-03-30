@@ -120,6 +120,7 @@ public class AdminController {
         PaginatedActivityLogResponse response = activityLogService.getActivityLogsByUser(userId, page, size);
         return ResponseEntity.ok(response);
     }
+<<<<<<< HEAD
 
     // Database Backup APIs
     @PostMapping("/database/backup")
