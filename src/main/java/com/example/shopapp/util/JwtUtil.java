@@ -12,7 +12,7 @@ public class JwtUtil {
 
     // 🔐 Khoá bí mật – có thể chuyển sang lấy từ `application.properties`
     private final String jwtSecret = "jwt-secret-key-that-is-long-enough-for-security";
-    private final long jwtExpirationMs = 86400000; // 1 ngày
+    private final long jwtExpirationMs = 604800000; 
 
     private Key getSigningKey() {
         return Keys.hmacShaKeyFor(jwtSecret.getBytes());
