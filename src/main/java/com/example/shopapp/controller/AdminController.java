@@ -121,6 +121,28 @@ public class AdminController {
         return ResponseEntity.ok(response);
     }
 
+    @GetMapping("/activities/export")
+    public ResponseEntity<byte[]> exportActivityLogs(
+            @RequestParam(required = false) String actionType,
+            @RequestParam(required = false) String entityType,
+            @RequestParam(required = false) String userEmail,
+            @RequestParam(required = false) String startDate,
+            @RequestParam(required = false) String endDate) {
+        System.out.println("[AdminController] Exporting activity logs to CSV");
+        try {
+            byte[] csvData = activityLogService.exportActivityLogsToCSV(actionType, entityType, userEmail, startDate, endDate);
+            
+            return ResponseEntity.ok()
+                    .header("Content-Disposition", "attachment; filename=activity-logs.csv")
+                    .header("Content-Type", "text/csv; charset=UTF-8")
+                    .body(csvData);
+        } catch (Exception e) {
+            System.err.println("[AdminController] Error exporting activity logs: " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.status(500).build();
+        }
+    }
+
     // Database Backup APIs
     @PostMapping("/database/backup")
     public ResponseEntity<?> createDatabaseBackup() {

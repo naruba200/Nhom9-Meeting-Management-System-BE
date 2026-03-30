@@ -53,4 +53,18 @@ public interface ActivityLogRepository extends JpaRepository<ActivityLog, Long> 
     @Query("SELECT al FROM ActivityLog al WHERE al.actionType IN ('LOGIN', 'LOGOUT') " +
            "AND al.user.id = :userId ORDER BY al.timestamp DESC")
     List<ActivityLog> findLoginLogoutHistory(@Param("userId") Long userId);
+
+    @Query("SELECT al FROM ActivityLog al WHERE " +
+           "(:actionType IS NULL OR al.actionType = :actionType) AND " +
+           "(:entityType IS NULL OR al.entityType = :entityType) AND " +
+           "(:userEmail IS NULL OR al.user.email LIKE LOWER(CONCAT('%', :userEmail, '%'))) AND " +
+           "(:startDate IS NULL OR al.timestamp >= :startDate) AND " +
+           "(:endDate IS NULL OR al.timestamp <= :endDate) " +
+           "ORDER BY al.timestamp DESC")
+    List<ActivityLog> searchActivityLogsForExport(
+            @Param("actionType") ActivityActionType actionType,
+            @Param("entityType") ActivityEntityType entityType,
+            @Param("userEmail") String userEmail,
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate);
 }

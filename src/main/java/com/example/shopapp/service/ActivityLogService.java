@@ -18,6 +18,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.stream.Collectors;
+import java.nio.charset.StandardCharsets;
 
 @Service
 @RequiredArgsConstructor
@@ -155,5 +156,64 @@ public class ActivityLogService {
                 .timestamp(log.getTimestamp().format(DATE_FORMATTER))
                 .details(log.getDetails())
                 .build();
+    }
+
+    public byte[] exportActivityLogsToCSV(
+            String actionType, String entityType, String userEmail,
+            String startDate, String endDate) {
+        System.out.println("[ActivityLogService] Exporting activity logs to CSV");
+
+        ActivityActionType action = null;
+        ActivityEntityType entity = null;
+        LocalDateTime start = null;
+        LocalDateTime end = null;
+
+        try {
+            if (actionType != null && !actionType.isEmpty()) {
+                action = ActivityActionType.valueOf(actionType.toUpperCase());
+            }
+            if (entityType != null && !entityType.isEmpty()) {
+                entity = ActivityEntityType.valueOf(entityType.toUpperCase());
+            }
+            if (startDate != null && !startDate.isEmpty()) {
+                start = LocalDateTime.parse(startDate, DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+            }
+            if (endDate != null && !endDate.isEmpty()) {
+                end = LocalDateTime.parse(endDate, DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+            }
+        } catch (IllegalArgumentException e) {
+            System.err.println("[ActivityLogService] Invalid filter parameters: " + e.getMessage());
+        }
+
+        List<ActivityLog> logs = activityLogRepository.searchActivityLogsForExport(action, entity, userEmail, start, end);
+
+        StringBuilder csv = new StringBuilder();
+        csv.append("ID,User Email,Full Name,Action,Entity Type,Entity ID,Description,Status Code,Timestamp,IP Address,User Agent\n");
+
+        for (ActivityLog log : logs) {
+            csv.append(escapeCsvValue(log.getId().toString())).append(",");
+            csv.append(escapeCsvValue(log.getUser().getEmail())).append(",");
+            csv.append(escapeCsvValue(log.getUser().getFullName())).append(",");
+            csv.append(escapeCsvValue(log.getActionType().toString())).append(",");
+            csv.append(escapeCsvValue(log.getEntityType().toString())).append(",");
+            csv.append(escapeCsvValue(log.getEntityId() != null ? log.getEntityId().toString() : "")).append(",");
+            csv.append(escapeCsvValue(log.getDescription())).append(",");
+            csv.append(escapeCsvValue(log.getStatusCode() != null ? log.getStatusCode().toString() : "")).append(",");
+            csv.append(escapeCsvValue(log.getTimestamp().format(DATE_FORMATTER))).append(",");
+            csv.append(escapeCsvValue(log.getIpAddress())).append(",");
+            csv.append(escapeCsvValue(log.getUserAgent())).append("\n");
+        }
+
+        return csv.toString().getBytes(StandardCharsets.UTF_8);
+    }
+
+    private String escapeCsvValue(String value) {
+        if (value == null) {
+            return "";
+        }
+        if (value.contains(",") || value.contains("\"") || value.contains("\n")) {
+            return "\"" + value.replace("\"", "\"\"") + "\"";
+        }
+        return value;
     }
 }
